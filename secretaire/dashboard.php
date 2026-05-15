@@ -33,7 +33,6 @@ $totalActivites = $pdo->query("SELECT COUNT(*) FROM activite_pedagogique")->fetc
                 <span><?= date("d/m/Y") ?></span>
                 <strong><?= htmlspecialchars($_SESSION["login"]) ?></strong>
                 <small>SECRÉTAIRE PRINCIPAL</small>
-                <a href="../auth/logout.php" class="btn-logout">Déconnexion</a>
 
             </div>
         </header>
@@ -54,49 +53,33 @@ $totalActivites = $pdo->query("SELECT COUNT(*) FROM activite_pedagogique")->fetc
 
             <div class="cards">
 
-                <a href="enseignants.php" class="card-link">
+                
                     <div class="card">
                         <span class="card-icon purple">👨‍🏫</span>
                         <h3>Enseignants</h3>
                         <p><?= $totalEnseignants ?></p>
-                        <small>Enregistrer et gérer les enseignants</small>
+                        <small>Enseignant(s) enregistré(s)</small>
                     </div>
-                </a>
+                
 
-                <a href="cours.php" class="card-link">
+                
                     <div class="card">
                         <span class="card-icon blue">📘</span>
                         <h3>Cours</h3>
                         <p><?= $totalCours ?></p>
-                        <small>Gérer les cours</small>
+                        <small>Cours enregistré(s)</small>
                     </div>
-                </a>
+                
         
 
-                <a href="activites.php" class="card-link">
+                
                     <div class="card">
                         <span class="card-icon orange">📝</span>
                         <h3>Activités pédagogiques</h3>
                         <p><?= $totalActivites ?></p>
-                        <small>Saisir les activités des enseignants</small>
+                        <small>Activité(s) saisie(s)</small>
                     </div>
-                </a>
-
-                <a href="validations.php" class="card-link">
-                    <div class="card">
-                        <span class="card-icon dark">✅</span>
-                        <h3>Validation des activités</h3>
-                        <small>Valider ou rejeter les activités</small>
-                    </div>
-                </a>
-
-                <a href="paiements.php" class="card-link">
-                    <div class="card">
-                        <span class="card-icon green">💰</span>
-                        <h3>États de paiement</h3>
-                        <small>Préparer les états de paiement</small>
-                    </div>
-                </a>
+                
 
             </div>
 

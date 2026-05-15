@@ -52,7 +52,7 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
                 </p>
 
                 <a href="creer_cours.php" class="btn-card">
-                    Accéder →
+                    Accéder 
                 </a>
 
             </div>
@@ -73,7 +73,7 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
                 </p>
 
                 <a href="liste_cours.php" class="btn-card">
-                    Accéder →
+                    Accéder 
                 </a>
 
             </div>

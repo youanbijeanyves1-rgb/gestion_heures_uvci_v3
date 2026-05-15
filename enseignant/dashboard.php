@@ -221,7 +221,7 @@ if(!$enseignant){
                     <div class="card-icon purple">📄</div>
                     <h3>Mon récapitulatif</h3>
                     <p>
-                        Générer ou télécharger mon récapitulatif d’activités pédagogiques par période.
+                        Télécharger mon récapitulatif d’activités pédagogiques par période.
                     </p>
                 </div>
 

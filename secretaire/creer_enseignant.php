@@ -17,8 +17,17 @@ $grades = $pdo->query("SELECT id_grade, libelle_grade FROM grade ORDER BY libell
 $departements = $pdo->query("SELECT id_departement, nom_departement FROM departement WHERE actif = 1 ORDER BY nom_departement")
                     ->fetchAll(PDO::FETCH_ASSOC);
 
-$tauxHoraires = $pdo->query("SELECT id_taux, categorie, montant FROM taux_horaire WHERE actif = 1 ORDER BY categorie")
-                    ->fetchAll(PDO::FETCH_ASSOC);
+$tauxHoraires = $pdo->query("
+    SELECT 
+        id_taux,
+        statut,
+        niveau,
+        categorie,
+        montant
+    FROM taux_horaire
+    WHERE actif = 1
+    ORDER BY statut, niveau, categorie
+")->fetchAll(PDO::FETCH_ASSOC);
 
 $comptesEnseignants = $pdo->query("
     SELECT u.id_utilisateur, u.login
@@ -40,12 +49,18 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
     $statut = $_POST["statut"] ?? "";
     $idGrade = $_POST["id_grade"] ?? "";
     $idDepartement = $_POST["id_departement"] ?? "";
-    $idTaux = $_POST["id_taux"] ?? "";
     $idUtilisateur = $_POST["id_utilisateur"] ?? null;
+    $idTauxSelectionnes = $_POST["id_taux"] ?? [];
 
     if($idUtilisateur === ""){
         $idUtilisateur = null;
     }
+
+    if(!is_array($idTauxSelectionnes)){
+        $idTauxSelectionnes = [$idTauxSelectionnes];
+    }
+
+    $idTauxSelectionnes = array_filter($idTauxSelectionnes);
 
     if(
         $nom === "" ||
@@ -55,7 +70,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
         $statut === "" ||
         $idGrade === "" ||
         $idDepartement === "" ||
-        $idTaux === ""
+        empty($idTauxSelectionnes)
     ){
         $message = "Veuillez remplir tous les champs obligatoires.";
         $typeMessage = "error";
@@ -69,6 +84,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
         $typeMessage = "error";
     }
     else{
+
         $verifEmail = $pdo->prepare("SELECT COUNT(*) FROM enseignant WHERE email = ?");
         $verifEmail->execute([$email]);
 
@@ -76,47 +92,94 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
             $message = "Cet email est déjà utilisé par un autre enseignant.";
             $typeMessage = "error";
         }else{
-            $sql = "INSERT INTO enseignant(
-                        nom,
-                        prenoms,
-                        email,
-                        telephone,
-                        statut,
-                        actif,
-                        id_departement,
-                        id_grade,
+
+            try{
+
+                $pdo->beginTransaction();
+
+                /*
+                    Compatibilité :
+                    La colonne enseignant.id_taux existe encore.
+                    On y met le premier taux sélectionné pour ne pas casser l'ancien modèle.
+                    Mais les vrais taux multiples sont enregistrés dans enseignant_taux_horaire.
+                */
+                $idTauxPrincipal = $idTauxSelectionnes[0];
+
+                $sql = "INSERT INTO enseignant(
+                            nom,
+                            prenoms,
+                            email,
+                            telephone,
+                            statut,
+                            actif,
+                            id_departement,
+                            id_grade,
+                            id_taux,
+                            id_utilisateur
+                        )
+                        VALUES(
+                            :nom,
+                            :prenoms,
+                            :email,
+                            :telephone,
+                            :statut,
+                            1,
+                            :id_departement,
+                            :id_grade,
+                            :id_taux,
+                            :id_utilisateur
+                        )";
+
+                $stmt = $pdo->prepare($sql);
+
+                $stmt->execute([
+                    "nom" => $nom,
+                    "prenoms" => $prenoms,
+                    "email" => $email,
+                    "telephone" => $telephone,
+                    "statut" => $statut,
+                    "id_departement" => $idDepartement,
+                    "id_grade" => $idGrade,
+                    "id_taux" => $idTauxPrincipal,
+                    "id_utilisateur" => $idUtilisateur
+                ]);
+
+                $idEnseignant = $pdo->lastInsertId();
+
+                $stmtTaux = $pdo->prepare("
+                    INSERT INTO enseignant_taux_horaire(
+                        id_enseignant,
                         id_taux,
-                        id_utilisateur
+                        actif
                     )
                     VALUES(
-                        :nom,
-                        :prenoms,
-                        :email,
-                        :telephone,
-                        :statut,
-                        1,
-                        :id_departement,
-                        :id_grade,
+                        :id_enseignant,
                         :id_taux,
-                        :id_utilisateur
-                    )";
+                        1
+                    )
+                ");
 
-            $stmt = $pdo->prepare($sql);
+                foreach($idTauxSelectionnes as $idTaux){
+                    $stmtTaux->execute([
+                        "id_enseignant" => $idEnseignant,
+                        "id_taux" => $idTaux
+                    ]);
+                }
 
-            $stmt->execute([
-                "nom" => $nom,
-                "prenoms" => $prenoms,
-                "email" => $email,
-                "telephone" => $telephone,
-                "statut" => $statut,
-                "id_departement" => $idDepartement,
-                "id_grade" => $idGrade,
-                "id_taux" => $idTaux,
-                "id_utilisateur" => $idUtilisateur
-            ]);
+                $pdo->commit();
 
-            $message = "Enseignant enregistré avec succès.";
-            $typeMessage = "success";
+                $message = "Enseignant enregistré avec succès avec ses taux horaires.";
+                $typeMessage = "success";
+
+            }catch(Exception $e){
+
+                if($pdo->inTransaction()){
+                    $pdo->rollBack();
+                }
+
+                $message = "Erreur lors de l'enregistrement : " . $e->getMessage();
+                $typeMessage = "error";
+            }
         }
     }
 }
@@ -134,7 +197,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
         <header class="topbar">
             <div>
                 <h1>Création d’un enseignant</h1>
-                <p>Enregistrer les informations administratives d’un enseignant.</p>
+                <p>Enregistrer les informations administratives d’un enseignant et ses taux horaires.</p>
             </div>
 
             <div class="user-box">
@@ -149,7 +212,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
             <div class="form-card">
 
                 <?php if($message !== ""): ?>
-                    <div class="alert <?= $typeMessage ?>">
+                    <div class="alert <?= htmlspecialchars($typeMessage) ?>">
                         <?= htmlspecialchars($message) ?>
                     </div>
                 <?php endif; ?>
@@ -191,7 +254,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
                             <option value="">-- Sélectionner un grade --</option>
 
                             <?php foreach($grades as $grade): ?>
-                                <option value="<?= $grade["id_grade"] ?>">
+                                <option value="<?= htmlspecialchars($grade["id_grade"]) ?>">
                                     <?= htmlspecialchars($grade["libelle_grade"]) ?>
                                 </option>
                             <?php endforeach; ?>
@@ -204,7 +267,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
                             <option value="">-- Sélectionner un département --</option>
 
                             <?php foreach($departements as $departement): ?>
-                                <option value="<?= $departement["id_departement"] ?>">
+                                <option value="<?= htmlspecialchars($departement["id_departement"]) ?>">
                                     <?= htmlspecialchars($departement["nom_departement"]) ?>
                                 </option>
                             <?php endforeach; ?>
@@ -212,12 +275,19 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
                     </div>
 
                     <div class="form-group">
-                        <label>Taux horaire <span>*</span></label>
-                        <select name="id_taux" required>
-                            <option value="">-- Sélectionner un taux horaire --</option>
+                        <label>Taux horaires <span>*</span></label>
+                        <small>
+                            Maintenir la touche CTRL pour sélectionner plusieurs taux horaires
+                            Licence et Master si nécessaire.
+                        </small>
 
+                        <select name="id_taux[]" multiple required size="6">
                             <?php foreach($tauxHoraires as $taux): ?>
-                                <option value="<?= $taux["id_taux"] ?>">
+                                <option value="<?= htmlspecialchars($taux["id_taux"]) ?>">
+                                    <?= htmlspecialchars($taux["statut"]) ?>
+                                    —
+                                    <?= htmlspecialchars($taux["niveau"]) ?>
+                                    —
                                     <?= htmlspecialchars($taux["categorie"]) ?>
                                     —
                                     <?= number_format($taux["montant"], 0, ',', ' ') ?> FCFA
@@ -232,7 +302,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
                             <option value="">Aucun compte lié pour l’instant</option>
 
                             <?php foreach($comptesEnseignants as $compte): ?>
-                                <option value="<?= $compte["id_utilisateur"] ?>">
+                                <option value="<?= htmlspecialchars($compte["id_utilisateur"]) ?>">
                                     <?= htmlspecialchars($compte["login"]) ?>
                                 </option>
                             <?php endforeach; ?>

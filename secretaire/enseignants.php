@@ -38,7 +38,6 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
 
             <div class="module-grid">
 
-                <a href="creer_enseignant.php" class="module-link">
                     <div class="module-card">
                         <div class="module-icon purple">👨‍🏫</div>
 
@@ -48,12 +47,13 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
                             Enregistrer un enseignant avec son grade, son statut,
                             son département, son taux horaire et ses coordonnées.
                         </p>
-
-                        <span class="module-btn">Accéder →</span>
+                        <a href="creer_enseignant.php" class="module-link">
+                        <span class="module-btn">Accéder</span>
+                        </a>
                     </div>
-                </a>
+                
 
-                <a href="liste_enseignants.php" class="module-link">
+            
                     <div class="module-card">
                         <div class="module-icon blue">📋</div>
 
@@ -62,10 +62,11 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
                         <p>
                             Consulter, modifier, désactiver ou réactiver les enseignants enregistrés.
                         </p>
-
-                        <span class="module-btn">Accéder →</span>
+                        <a href="liste_enseignants.php" class="module-link">
+                        <span class="module-btn">Accéder</span>
+                        </a>
                     </div>
-                </a>
+                
 
             </div>
 

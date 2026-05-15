@@ -59,7 +59,7 @@ $totalTaux = $pdo->query("SELECT COUNT(*) FROM taux_horaire WHERE actif = 1")->f
                     </div>
             
 
-                <a href="annees.php" class="card-link">
+                
                     <div class="card">
                         <span class="card-icon green">📅</span>
                         <h3>Années académiques</h3>
@@ -68,7 +68,7 @@ $totalTaux = $pdo->query("SELECT COUNT(*) FROM taux_horaire WHERE actif = 1")->f
                     </div>
                 </a>
 
-                <a href="parametres.php" class="card-link">
+                
                     <div class="card">
                         <span class="card-icon blue">⚙️</span>
                         <h3>Paramètres de calcul</h3>
@@ -77,7 +77,7 @@ $totalTaux = $pdo->query("SELECT COUNT(*) FROM taux_horaire WHERE actif = 1")->f
                     </div>
                 </a>
 
-                <a href="taux_horaires.php" class="card-link">
+                
                     <div class="card">
                         <span class="card-icon orange">💰</span>
                         <h3>Taux horaires</h3>

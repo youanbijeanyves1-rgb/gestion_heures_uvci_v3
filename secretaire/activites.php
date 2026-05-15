@@ -34,22 +34,20 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
 
             <div class="module-grid">
 
-                <a href="creer_activite.php" class="module-link">
                     <div class="module-card">
                         <div class="module-icon purple">📝</div>
 
                         <h3>Enregistrer une activité pédagogique</h3>
 
                         <p>
-                            Enregistrer la création ou la mise à jour d’une ressource pédagogique,
-                            avec calcul automatique des séquences et du volume horaire.
+                            Enregistrer la création ou la mise à jour d’une ressource pédagogique.
                         </p>
-
-                        <span class="module-btn">Accéder →</span>
+                        <a href="creer_activite.php" class="module-link">
+                        <span class="module-btn">Accéder </span>
+                        </a>
                     </div>
-                </a>
+                
 
-                <a href="liste_activites.php" class="module-link">
                     <div class="module-card">
                         <div class="module-icon blue">📋</div>
 
@@ -58,25 +56,10 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
                         <p>
                             Consulter, suivre et contrôler les activités pédagogiques enregistrées.
                         </p>
-
-                        <span class="module-btn">Accéder →</span>
+                        <a href="liste_activites.php" class="module-link">
+                        <span class="module-btn">Accéder </span>
+                        </a>
                     </div>
-                </a>
-
-                <a href="validations.php" class="module-link">
-                    <div class="module-card">
-                        <div class="module-icon green">✅</div>
-
-                        <h3>Validation des activités</h3>
-
-                        <p>
-                            Valider ou rejeter les activités pédagogiques avant leur prise en compte
-                            dans les volumes horaires et paiements.
-                        </p>
-
-                        <span class="module-btn">Accéder →</span>
-                    </div>
-                </a>
 
             </div>
 

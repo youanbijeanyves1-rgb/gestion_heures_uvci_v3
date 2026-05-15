@@ -112,9 +112,6 @@ $annees = $pdo->query("
                 <strong><?= htmlspecialchars($_SESSION["login"]) ?></strong>
                 <small>ADMINISTRATEUR</small>
 
-                <a href="../auth/logout.php" class="btn-logout">
-                    Déconnexion
-                </a>
             </div>
         </header>
 
