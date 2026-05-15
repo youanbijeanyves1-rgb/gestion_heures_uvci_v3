@@ -1,143 +1,387 @@
 <?php
 
-require_once "../auth/verifier_session.php";
-require_once "../config/database.php";
+session_start();
+
+if(
+    !isset($_SESSION["id_utilisateur"]) ||
+    !isset($_SESSION["role"])
+){
+    header("Location: ../auth/login.php");
+    exit;
+}
 
 if($_SESSION["role"] !== "ENSEIGNANT"){
     header("Location: ../auth/login.php");
     exit;
 }
 
+require_once "../config/database.php";
+
 $idUtilisateur = $_SESSION["id_utilisateur"];
+$login = $_SESSION["login"];
 
-$stmtEns = $pdo->prepare("
-    SELECT 
-        e.id_enseignant,
-        e.nom,
-        e.prenoms,
-        e.statut,
-        g.libelle_grade,
-        g.charge_statutaire
-    FROM enseignant e
-    LEFT JOIN grade g ON g.id_grade = e.id_grade
-    WHERE e.id_utilisateur = ?
-    LIMIT 1
-");
-$stmtEns->execute([$idUtilisateur]);
-$enseignant = $stmtEns->fetch(PDO::FETCH_ASSOC);
+/*
+|--------------------------------------------------------------------------
+| STATISTIQUES ENSEIGNANT
+|--------------------------------------------------------------------------
+*/
 
-if(!$enseignant){
-    die("Aucun profil enseignant n’est lié à ce compte utilisateur.");
+$totalActivites = 0;
+$totalVolume = 0;
+$totalComplementaires = 0;
+
+try{
+
+    $sql = "
+        SELECT 
+            COUNT(*) AS total_activites,
+            COALESCE(SUM(volume_horaire_calcule),0) AS total_volume
+        FROM activite_pedagogique
+        WHERE id_utilisateur = ?
+    ";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$idUtilisateur]);
+
+    $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if($stats){
+
+        $totalActivites = $stats["total_activites"];
+        $totalVolume = $stats["total_volume"];
+
+        /*
+        |--------------------------------------------------------------------------
+        | HEURES COMPLEMENTAIRES
+        |--------------------------------------------------------------------------
+        */
+
+        if($totalVolume > 240){
+            $totalComplementaires = $totalVolume - 240;
+        }
+    }
+
+}catch(Exception $e){
+
+    $totalActivites = 0;
+    $totalVolume = 0;
+    $totalComplementaires = 0;
 }
 
-$idEnseignant = $enseignant["id_enseignant"];
+/*
+|--------------------------------------------------------------------------
+| ACTIVITES RECENTES
+|--------------------------------------------------------------------------
+*/
 
-$stmtStats = $pdo->prepare("
-    SELECT 
-        COUNT(*) AS total_activites,
-        COALESCE(SUM(volume_horaire_calcule), 0) AS volume_total
-    FROM activite_pedagogique
-    WHERE id_enseignant = ?
-      AND statut_validation = 'VALIDEE'
-");
-$stmtStats->execute([$idEnseignant]);
-$stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
+$activites = [];
 
-$volumeTotal = (float)$stats["volume_total"];
-$chargeStatutaire = (float)($enseignant["charge_statutaire"] ?? 0);
+try{
 
-if($enseignant["statut"] === "PERMANENT"){
-    $heuresComplementaires = max(0, $volumeTotal - $chargeStatutaire);
-    $texteHC = number_format($heuresComplementaires, 2, ',', ' ') . " h";
-}else{
-    $texteHC = "Non concerné";
+    $sql = "
+        SELECT 
+            observation,
+            type_activite,
+            volume_horaire_calcule,
+            date_activite
+        FROM activite_pedagogique
+        WHERE id_utilisateur = ?
+        ORDER BY date_activite DESC
+        LIMIT 5
+    ";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$idUtilisateur]);
+
+    $activites = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+}catch(Exception $e){
+    $activites = [];
 }
 
 ?>
 
-<?php require_once "../includes/header.php"; ?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
 
-<div class="wrapper">
+    <meta charset="UTF-8">
 
-    <?php require_once "../includes/sidebar_enseignant.php"; ?>
+    <title>Dashboard Enseignant</title>
 
-    <main class="main">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-        <header class="topbar">
-            <div>
-                <h1>Tableau de bord Enseignant</h1>
-                <p>Espace personnel de suivi pédagogique.</p>
-            </div>
+    <link rel="stylesheet" href="../assets/css/style.css">
 
-            <div class="user-box">
-                <span><?= date("d/m/Y") ?></span>
-                <strong><?= htmlspecialchars($_SESSION["login"]) ?></strong>
-                <small>ENSEIGNANT</small>
-                <a href="../auth/logout.php" class="btn-logout">Déconnexion</a>
-            </div>
-        </header>
+    <style>
 
-        <section class="content">
+        body{
+            margin:0;
+            font-family:Arial, Helvetica, sans-serif;
+            background:#f1f5f9;
+        }
 
-            <div class="welcome-card">
-                <div>
-                    <h2>
-                        Bienvenue, <?= htmlspecialchars($enseignant["nom"] . " " . $enseignant["prenoms"]) ?>.
-                    </h2>
+        .topbar{
+            background:linear-gradient(135deg,#1e3a8a,#06b6d4);
+            color:white;
+            padding:20px 30px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            flex-wrap:wrap;
+        }
 
-                    <p>
-                        Grade :
-                        <strong><?= htmlspecialchars($enseignant["libelle_grade"] ?? "Non défini") ?></strong>
-                        —
-                        Statut :
-                        <strong><?= htmlspecialchars($enseignant["statut"]) ?></strong>
-                    </p>
+        .topbar h1{
+            margin:0;
+            font-size:28px;
+        }
+
+        .logout-btn{
+            background:white;
+            color:#1e3a8a;
+            padding:10px 18px;
+            border-radius:10px;
+            text-decoration:none;
+            font-weight:bold;
+        }
+
+        .container{
+            padding:30px;
+        }
+
+        .welcome-box{
+            background:white;
+            padding:25px;
+            border-radius:18px;
+            margin-bottom:25px;
+            box-shadow:0 8px 20px rgba(0,0,0,.08);
+        }
+
+        .cards{
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+            gap:20px;
+            margin-bottom:30px;
+        }
+
+        .card{
+            background:white;
+            border-radius:18px;
+            padding:25px;
+            box-shadow:0 8px 20px rgba(0,0,0,.08);
+        }
+
+        .card h3{
+            margin:0 0 10px;
+            color:#64748b;
+            font-size:15px;
+        }
+
+        .card .number{
+            font-size:35px;
+            font-weight:bold;
+            color:#0f172a;
+        }
+
+        .table-box{
+            background:white;
+            padding:25px;
+            border-radius:18px;
+            box-shadow:0 8px 20px rgba(0,0,0,.08);
+        }
+
+        table{
+            width:100%;
+            border-collapse:collapse;
+        }
+
+        th{
+            background:#0f172a;
+            color:white;
+            padding:14px;
+            text-align:left;
+        }
+
+        td{
+            padding:14px;
+            border-bottom:1px solid #e2e8f0;
+        }
+
+        .actions{
+            margin-top:25px;
+            display:flex;
+            gap:15px;
+            flex-wrap:wrap;
+        }
+
+        .btn{
+            padding:14px 20px;
+            border-radius:12px;
+            text-decoration:none;
+            color:white;
+            font-weight:bold;
+        }
+
+        .btn-blue{
+            background:#2563eb;
+        }
+
+        .btn-green{
+            background:#16a34a;
+        }
+
+        .btn-orange{
+            background:#ea580c;
+        }
+
+        @media(max-width:768px){
+
+            .topbar{
+                flex-direction:column;
+                gap:15px;
+                text-align:center;
+            }
+
+            table{
+                font-size:13px;
+            }
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <div class="topbar">
+
+        <h1>Dashboard Enseignant</h1>
+
+        <a href="../auth/logout.php" class="logout-btn">
+            Déconnexion
+        </a>
+
+    </div>
+
+    <div class="container">
+
+        <div class="welcome-box">
+
+            <h2>
+                Bienvenue <?= htmlspecialchars($login) ?>
+            </h2>
+
+            <p>
+                Espace personnel de suivi des activités pédagogiques UVCI.
+            </p>
+
+        </div>
+
+        <div class="cards">
+
+            <div class="card">
+                <h3>Total activités</h3>
+                <div class="number">
+                    <?= $totalActivites ?>
                 </div>
             </div>
 
-            <div class="cards">
+            <div class="card">
+                <h3>Volume horaire</h3>
+                <div class="number">
+                    <?= $totalVolume ?> h
+                </div>
+            </div>
 
-                <a href="mes_activites.php" class="card-link">
-                    <div class="card">
-                        <span class="card-icon blue">📋</span>
-                        <h3>Mes activités pédagogiques</h3>
-                        <p><?= (int)$stats["total_activites"] ?></p>
-                        <small>Consulter les activités qui me sont attribuées</small>
-                    </div>
+            <div class="card">
+                <h3>Heures complémentaires</h3>
+                <div class="number">
+                    <?= $totalComplementaires ?> h
+                </div>
+            </div>
+
+        </div>
+
+        <div class="table-box">
+
+            <h2>
+                Mes activités récentes
+            </h2>
+
+            <br>
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Activité</th>
+                        <th>Type</th>
+                        <th>Volume</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    <?php if(empty($activites)): ?>
+
+                        <tr>
+                            <td colspan="4">
+                                Aucune activité enregistrée.
+                            </td>
+                        </tr>
+
+                    <?php else: ?>
+
+                        <?php foreach($activites as $activite): ?>
+
+                            <tr>
+
+                                <td>
+                                    <?= htmlspecialchars($activite["observation"]) ?>
+                                </td>
+
+                                <td>
+                                    <?= htmlspecialchars($activite["type_activite"]) ?>
+                                </td>
+
+                                <td>
+                                    <?= htmlspecialchars($activite["volume_horaire_calcule"]) ?> h
+                                </td>
+
+                                <td>
+                                    <?= htmlspecialchars($activite["date_activite"]) ?>
+                                </td>
+
+                            </tr>
+
+                        <?php endforeach; ?>
+
+                    <?php endif; ?>
+
+                </tbody>
+
+            </table>
+
+            <div class="actions">
+
+                <a href="mes_activites.php" class="btn btn-blue">
+                    Consulter mes activités
                 </a>
 
-                <a href="mon_volume_horaire.php" class="card-link">
-                    <div class="card">
-                        <span class="card-icon purple">⏱️</span>
-                        <h3>Mon volume horaire</h3>
-                        <p><?= number_format($volumeTotal, 2, ',', ' ') ?> h</p>
-                        <small>Vérifier le volume horaire validé</small>
-                    </div>
+                <a href="#" class="btn btn-green">
+                    Télécharger récapitulatif
                 </a>
 
-                <a href="mes_heures_complementaires.php" class="card-link">
-                    <div class="card">
-                        <span class="card-icon green">➕</span>
-                        <h3>Mes heures complémentaires</h3>
-                        <p><?= htmlspecialchars($texteHC) ?></p>
-                        <small>Les vacataires ne sont pas concernés</small>
-                    </div>
-                </a>
-
-                <a href="mon_recapitulatif.php" class="card-link">
-                    <div class="card">
-                        <span class="card-icon orange">📄</span>
-                        <h3>Mon récapitulatif</h3>
-                        <small>Télécharger ou consulter mon récapitulatif pédagogique</small>
-                    </div>
+                <a href="#" class="btn btn-orange">
+                    Suivre mes heures complémentaires
                 </a>
 
             </div>
 
-        </section>
+        </div>
 
-        <?php require_once "../includes/footer.php"; ?>
+    </div>
 
-    </main>
-
-</div>
+</body>
+</html>
