@@ -6,7 +6,7 @@ session_start();
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>UVCI | Gestion des Heures</title>
+    <title>UVCI | Gestion des Heures des Enseignants</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <style>
@@ -200,7 +200,7 @@ session_start();
     </div>
 
     <div class="hero">
-        <h2>Gestion des Heures</h2>
+        <h2>Gestion des Heures des Enseignants</h2>
         <p>
             Enregistrement, consultation et contrôle des volumes horaires des enseignants.
         </p>

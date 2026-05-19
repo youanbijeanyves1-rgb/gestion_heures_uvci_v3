@@ -2,6 +2,7 @@
 
 require_once "../auth/verifier_session.php";
 require_once "../config/database.php";
+require_once "../includes/fonctions_metier.php";
 
 if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
     header("Location: ../auth/login.php");
@@ -34,8 +35,7 @@ if($idAnnee === ""){
     }
 }
 
-$params = ["id_annee" => $idAnnee];
-
+$params = [];
 $where = "ap.statut_validation = 'VALIDEE'";
 
 if($dateDebut !== "" && $dateFin !== ""){
@@ -55,37 +55,42 @@ SELECT
     e.nom,
     e.prenoms,
     e.statut,
+    e.id_grade,
     g.libelle_grade,
     g.charge_statutaire,
     c.niveau,
-    SUM(ap.volume_horaire_calcule) AS volume_total,
-    th.montant AS taux_horaire
+    SUM(ap.volume_horaire_calcule) AS volume_total
 FROM activite_pedagogique ap
 JOIN enseignant e ON e.id_enseignant = ap.id_enseignant
 LEFT JOIN grade g ON g.id_grade = e.id_grade
 JOIN cours c ON c.id_cours = ap.id_cours
-LEFT JOIN taux_horaire th
-    ON th.statut = e.statut
-    AND th.id_grade = e.id_grade
-    AND th.niveau = c.niveau
-    AND th.id_annee = :id_annee
-    AND th.actif = 1
 WHERE $where
 GROUP BY
     e.id_enseignant,
     e.nom,
     e.prenoms,
     e.statut,
+    e.id_grade,
     g.libelle_grade,
     g.charge_statutaire,
-    c.niveau,
-    th.montant
+    c.niveau
 ORDER BY e.nom, e.prenoms, c.niveau
 ";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $lignes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$stmtTaux = $pdo->prepare("
+    SELECT montant
+    FROM taux_horaire
+    WHERE statut = ?
+      AND id_grade = ?
+      AND niveau = ?
+      AND id_annee = ?
+      AND actif = 1
+    LIMIT 1
+");
 
 $totalGeneral = 0;
 $totalVolume = 0;
@@ -94,8 +99,24 @@ $totalEnseignants = [];
 
 foreach($lignes as &$l){
 
+    $niveauCours = $l["niveau"];
+    $niveauTaux = niveauTauxDepuisNiveauCours($niveauCours);
+
+    $taux = 0;
+
+    if($niveauTaux !== null && $idAnnee !== ""){
+        $stmtTaux->execute([
+            $l["statut"],
+            $l["id_grade"],
+            $niveauTaux,
+            $idAnnee
+        ]);
+
+        $tauxTrouve = $stmtTaux->fetch(PDO::FETCH_ASSOC);
+        $taux = (float)($tauxTrouve["montant"] ?? 0);
+    }
+
     $volume = (float)$l["volume_total"];
-    $taux = (float)($l["taux_horaire"] ?? 0);
 
     if($l["statut"] === "VACATAIRE"){
         $heuresPayables = $volume;
@@ -106,6 +127,8 @@ foreach($lignes as &$l){
 
     $montant = $heuresPayables * $taux;
 
+    $l["niveau_taux"] = $niveauTaux;
+    $l["taux_horaire"] = $taux;
     $l["heures_payables"] = $heuresPayables;
     $l["montant_a_payer"] = $montant;
 
@@ -130,8 +153,14 @@ unset($l);
             <div>
                 <h1>États de paiement</h1>
                 <p>État global et état individuel des paiements.</p>
-                <a href="export_paiement_pdf.php" class="btn-export-pdf">Exporter PDF</a>
-                <a href="export_paiement_excel.php" class="btn-export-excel">Exporter EXCEL</a>
+
+                <a href="export_paiement_pdf.php" class="btn-export-pdf">
+                    Exporter PDF
+                </a>
+
+                <a href="export_paiement_excel.php" class="btn-export-excel">
+                    Exporter EXCEL
+                </a>
             </div>
 
             <div class="badge-role">
@@ -160,6 +189,7 @@ unset($l);
                         <label>Enseignant</label>
                         <select name="id_enseignant">
                             <option value="">Tous les enseignants</option>
+
                             <?php foreach($enseignants as $e): ?>
                                 <option value="<?= $e["id_enseignant"] ?>" <?= $idEnseignant == $e["id_enseignant"] ? "selected" : "" ?>>
                                     <?= htmlspecialchars($e["nom"] . " " . $e["prenoms"]) ?>
@@ -178,8 +208,13 @@ unset($l);
                         <input type="date" name="date_fin" value="<?= htmlspecialchars($dateFin) ?>">
                     </div>
 
-                    <button type="submit" class="btn-primary">Générer</button>
-                    <a href="paiements.php" class="btn-secondary">Réinitialiser</a>
+                    <button type="submit" class="btn-primary">
+                        Générer
+                    </button>
+
+                    <a href="paiements.php" class="btn-secondary">
+                        Réinitialiser
+                    </a>
 
                 </form>
             </div>
@@ -230,6 +265,12 @@ unset($l);
 
                         <p>
                             <strong>Règle :</strong>
+                            L1, L2, L3 utilisent le taux LICENCE.
+                            M1, M2 utilisent le taux MASTER.
+                        </p>
+
+                        <p>
+                            <strong>Paiement :</strong>
                             Vacataire = tout le volume validé est payable.
                             Permanent = seules les heures complémentaires sont payables.
                         </p>
@@ -245,7 +286,8 @@ unset($l);
                                 <th>Enseignant</th>
                                 <th>Grade</th>
                                 <th>Statut</th>
-                                <th>Niveau</th>
+                                <th>Niveau cours</th>
+                                <th>Niveau taux</th>
                                 <th>Volume validé</th>
                                 <th>Charge statutaire</th>
                                 <th>Heures payables</th>
@@ -261,10 +303,14 @@ unset($l);
                                 <?php foreach($lignes as $l): ?>
                                     <tr>
                                         <td>
-                                            <strong><?= htmlspecialchars($l["nom"] . " " . $l["prenoms"]) ?></strong>
+                                            <strong>
+                                                <?= htmlspecialchars($l["nom"] . " " . $l["prenoms"]) ?>
+                                            </strong>
                                         </td>
 
-                                        <td><?= htmlspecialchars($l["libelle_grade"] ?? "Non défini") ?></td>
+                                        <td>
+                                            <?= htmlspecialchars($l["libelle_grade"] ?? "Non défini") ?>
+                                        </td>
 
                                         <td>
                                             <span class="badge-statut">
@@ -272,9 +318,17 @@ unset($l);
                                             </span>
                                         </td>
 
-                                        <td><?= htmlspecialchars($l["niveau"]) ?></td>
+                                        <td>
+                                            <?= htmlspecialchars($l["niveau"]) ?>
+                                        </td>
 
-                                        <td><?= number_format($l["volume_total"], 2, ',', ' ') ?> h</td>
+                                        <td>
+                                            <?= htmlspecialchars($l["niveau_taux"] ?? "Non défini") ?>
+                                        </td>
+
+                                        <td>
+                                            <?= number_format($l["volume_total"], 2, ',', ' ') ?> h
+                                        </td>
 
                                         <td>
                                             <?php if($l["statut"] === "PERMANENT"): ?>
@@ -291,7 +345,7 @@ unset($l);
                                         </td>
 
                                         <td>
-                                            <?php if($l["taux_horaire"] !== null): ?>
+                                            <?php if($l["taux_horaire"] > 0): ?>
                                                 <?= number_format($l["taux_horaire"], 0, ',', ' ') ?> FCFA
                                             <?php else: ?>
                                                 <span class="badge danger">Taux manquant</span>
@@ -315,7 +369,7 @@ unset($l);
                             <?php else: ?>
 
                                 <tr>
-                                    <td colspan="9" class="text-center">
+                                    <td colspan="10" class="text-center">
                                         Aucun état de paiement disponible pour cette période.
                                     </td>
                                 </tr>

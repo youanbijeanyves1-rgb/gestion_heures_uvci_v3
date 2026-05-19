@@ -1,0 +1,1 @@
+mysqldump.exe: Couldn't execute 'SHOW FIELDS FROM `vue_volume_par_enseignant`': View 'gestion_heures_uvci.vue_volume_par_enseignant' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them (1356)
