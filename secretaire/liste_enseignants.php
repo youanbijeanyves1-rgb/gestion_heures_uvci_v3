@@ -21,14 +21,21 @@ $sql = "
         e.actif,
         g.libelle_grade,
         d.nom_departement,
-        t.categorie AS categorie_taux,
-        t.montant,
+        GROUP_CONCAT(
+        CONCAT(t.categorie, ' : ', FORMAT(t.montant,0), ' FCFA')
+        SEPARATOR ' | '
+        ) AS taux_horaires,
         u.login AS compte_utilisateur
     FROM enseignant e
     JOIN grade g ON g.id_grade = e.id_grade
     JOIN departement d ON d.id_departement = e.id_departement
-    JOIN taux_horaire t ON t.id_taux = e.id_taux
+    LEFT JOIN enseignant_taux_horaire eth 
+    ON eth.id_enseignant = e.id_enseignant
+    LEFT JOIN taux_horaire t 
+    ON t.id_taux = eth.id_taux
     LEFT JOIN utilisateur u ON u.id_utilisateur = e.id_utilisateur
+    GROUP BY e.id_enseignant
+    ORDER BY e.nom ASC, e.prenoms ASC
 ";
 
 $params = [];
@@ -146,10 +153,7 @@ $enseignants = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                         <td><?= htmlspecialchars($enseignant["nom_departement"]) ?></td>
 
                                         <td>
-                                            <?= htmlspecialchars($enseignant["categorie_taux"]) ?><br>
-                                            <strong>
-                                                <?= number_format($enseignant["montant"], 0, ',', ' ') ?> FCFA
-                                            </strong>
+                                            <?= htmlspecialchars($enseignant["taux_horaires"] ?? "Aucun taux") ?>
                                         </td>
 
                                         <td>
