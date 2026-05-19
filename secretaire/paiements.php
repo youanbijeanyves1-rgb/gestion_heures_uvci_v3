@@ -38,6 +38,11 @@ if($idAnnee === ""){
 $params = [];
 $where = "ap.statut_validation = 'VALIDEE'";
 
+if($idAnnee !== ""){
+    $where .= " AND ap.id_annee = :id_annee";
+    $params["id_annee"] = $idAnnee;
+}
+
 if($dateDebut !== "" && $dateFin !== ""){
     $where .= " AND DATE(ap.date_saisie) BETWEEN :date_debut AND :date_fin";
     $params["date_debut"] = $dateDebut;
@@ -58,12 +63,13 @@ SELECT
     e.id_grade,
     g.libelle_grade,
     g.charge_statutaire,
-    c.niveau,
+    cf.niveau,
     SUM(ap.volume_horaire_calcule) AS volume_total
 FROM activite_pedagogique ap
 JOIN enseignant e ON e.id_enseignant = ap.id_enseignant
 LEFT JOIN grade g ON g.id_grade = e.id_grade
 JOIN cours c ON c.id_cours = ap.id_cours
+LEFT JOIN cours_filiere cf ON cf.id_cours = c.id_cours
 WHERE $where
 GROUP BY
     e.id_enseignant,
@@ -73,8 +79,8 @@ GROUP BY
     e.id_grade,
     g.libelle_grade,
     g.charge_statutaire,
-    c.niveau
-ORDER BY e.nom, e.prenoms, c.niveau
+    cf.niveau
+ORDER BY e.nom, e.prenoms, cf.niveau
 ";
 
 $stmt = $pdo->prepare($sql);
@@ -139,6 +145,16 @@ foreach($lignes as &$l){
 }
 unset($l);
 
+$lienPdf = "export_paiement_pdf.php?id_annee=" . urlencode($idAnnee)
+    . "&id_enseignant=" . urlencode($idEnseignant)
+    . "&date_debut=" . urlencode($dateDebut)
+    . "&date_fin=" . urlencode($dateFin);
+
+$lienExcel = "export_paiement_excel.php?id_annee=" . urlencode($idAnnee)
+    . "&id_enseignant=" . urlencode($idEnseignant)
+    . "&date_debut=" . urlencode($dateDebut)
+    . "&date_fin=" . urlencode($dateFin);
+
 ?>
 
 <?php require_once "../includes/header.php"; ?>
@@ -154,11 +170,11 @@ unset($l);
                 <h1>États de paiement</h1>
                 <p>État global et état individuel des paiements.</p>
 
-                <a href="export_paiement_pdf.php" class="btn-export-pdf">
+                <a href="<?= htmlspecialchars($lienPdf) ?>" class="btn-export-pdf">
                     Exporter PDF
                 </a>
 
-                <a href="export_paiement_excel.php" class="btn-export-excel">
+                <a href="<?= htmlspecialchars($lienExcel) ?>" class="btn-export-excel">
                     Exporter EXCEL
                 </a>
             </div>
@@ -264,13 +280,13 @@ unset($l);
                         </p>
 
                         <p>
-                            <strong>Règle :</strong>
+                            <strong>Règle niveau :</strong>
                             L1, L2, L3 utilisent le taux LICENCE.
                             M1, M2 utilisent le taux MASTER.
                         </p>
 
                         <p>
-                            <strong>Paiement :</strong>
+                            <strong>Règle paiement :</strong>
                             Vacataire = tout le volume validé est payable.
                             Permanent = seules les heures complémentaires sont payables.
                         </p>
@@ -319,7 +335,7 @@ unset($l);
                                         </td>
 
                                         <td>
-                                            <?= htmlspecialchars($l["niveau"]) ?>
+                                            <?= htmlspecialchars($l["niveau"] ?? "Non défini") ?>
                                         </td>
 
                                         <td>

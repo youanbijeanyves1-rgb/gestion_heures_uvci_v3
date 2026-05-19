@@ -2,11 +2,98 @@
 
 require_once "../auth/verifier_session.php";
 require_once "../config/database.php";
+require_once "../includes/fonctions_metier.php";
 
 if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
     header("Location: ../auth/login.php");
     exit;
 }
+
+$dateDebut = $_GET["date_debut"] ?? "";
+$dateFin = $_GET["date_fin"] ?? "";
+$idAnnee = $_GET["id_annee"] ?? "";
+$idEnseignant = $_GET["id_enseignant"] ?? "";
+
+if($idAnnee === ""){
+    $stmtAnnee = $pdo->query("
+        SELECT id_annee 
+        FROM annee_academique 
+        WHERE est_active = 1 
+        LIMIT 1
+    ");
+    $idAnnee = $stmtAnnee->fetchColumn();
+}
+
+$stmtLibelleAnnee = $pdo->prepare("
+    SELECT libelle_annee 
+    FROM annee_academique 
+    WHERE id_annee = ?
+");
+$stmtLibelleAnnee->execute([$idAnnee]);
+$libelleAnnee = $stmtLibelleAnnee->fetchColumn() ?: "Non définie";
+
+$params = [];
+$where = "ap.statut_validation = 'VALIDEE'";
+
+if($idAnnee !== ""){
+    $where .= " AND ap.id_annee = :id_annee";
+    $params["id_annee"] = $idAnnee;
+}
+
+if($dateDebut !== "" && $dateFin !== ""){
+    $where .= " AND DATE(ap.date_saisie) BETWEEN :date_debut AND :date_fin";
+    $params["date_debut"] = $dateDebut;
+    $params["date_fin"] = $dateFin;
+}
+
+if($idEnseignant !== ""){
+    $where .= " AND e.id_enseignant = :id_enseignant";
+    $params["id_enseignant"] = $idEnseignant;
+}
+
+$sql = "
+SELECT
+    e.id_enseignant,
+    e.nom,
+    e.prenoms,
+    e.statut,
+    e.id_grade,
+    g.libelle_grade,
+    g.charge_statutaire,
+    cf.niveau,
+    SUM(ap.volume_horaire_calcule) AS volume_total
+FROM activite_pedagogique ap
+JOIN enseignant e ON e.id_enseignant = ap.id_enseignant
+LEFT JOIN grade g ON g.id_grade = e.id_grade
+JOIN cours c ON c.id_cours = ap.id_cours
+LEFT JOIN cours_filiere cf ON cf.id_cours = c.id_cours
+WHERE $where
+GROUP BY
+    e.id_enseignant,
+    e.nom,
+    e.prenoms,
+    e.statut,
+    e.id_grade,
+    g.libelle_grade,
+    g.charge_statutaire,
+    cf.niveau
+ORDER BY e.nom, e.prenoms, cf.niveau
+";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$lignes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$stmtTaux = $pdo->prepare("
+    SELECT montant
+    FROM taux_horaire
+    WHERE statut = ?
+      AND id_grade = ?
+      AND niveau = ?
+      AND id_annee = ?
+      AND actif = 1
+    LIMIT 1
+");
 
 header("Content-Type: application/vnd.ms-excel; charset=UTF-8");
 header("Content-Disposition: attachment; filename=etat_paiements.xls");
@@ -15,13 +102,33 @@ header("Expires: 0");
 
 echo "\xEF\xBB\xBF";
 
+$periode = "Toutes les périodes";
+
+if($dateDebut !== "" && $dateFin !== ""){
+    $periode = "Du " . date("d/m/Y", strtotime($dateDebut)) . " au " . date("d/m/Y", strtotime($dateFin));
+}
+
 echo "
 <table border='1'>
+    <tr>
+        <th colspan='10' style='font-size:18px;'>ÉTAT GLOBAL DES PAIEMENTS</th>
+    </tr>
+    <tr>
+        <td colspan='10'><strong>Année académique :</strong> ".htmlspecialchars($libelleAnnee)."</td>
+    </tr>
+    <tr>
+        <td colspan='10'><strong>Période :</strong> ".htmlspecialchars($periode)."</td>
+    </tr>
+    <tr>
+        <td colspan='10'><strong>Date d’édition :</strong> ".date("d/m/Y à H:i")."</td>
+    </tr>
+    <tr></tr>
     <tr>
         <th>Enseignant</th>
         <th>Grade</th>
         <th>Statut</th>
-        <th>Niveau</th>
+        <th>Niveau cours</th>
+        <th>Niveau taux</th>
         <th>Volume validé</th>
         <th>Charge statutaire</th>
         <th>Heures payables</th>
@@ -30,49 +137,29 @@ echo "
     </tr>
 ";
 
-$sql = "
-SELECT
-    e.id_enseignant,
-    e.nom,
-    e.prenoms,
-    e.statut,
-    g.libelle_grade,
-    g.charge_statutaire,
-    c.niveau,
-    SUM(ap.volume_horaire_calcule) AS volume_total,
-    th.montant AS taux_horaire
-FROM activite_pedagogique ap
-JOIN enseignant e 
-    ON e.id_enseignant = ap.id_enseignant
-LEFT JOIN grade g 
-    ON g.id_grade = e.id_grade
-JOIN cours c 
-    ON c.id_cours = ap.id_cours
-LEFT JOIN taux_horaire th
-    ON th.statut = e.statut
-    AND th.id_grade = e.id_grade
-    AND th.niveau = c.niveau
-    AND th.actif = 1
-WHERE ap.statut_validation = 'VALIDEE'
-GROUP BY
-    e.id_enseignant,
-    e.nom,
-    e.prenoms,
-    e.statut,
-    g.libelle_grade,
-    g.charge_statutaire,
-    c.niveau,
-    th.montant
-ORDER BY e.nom, e.prenoms, c.niveau
-";
+$totalMontant = 0;
 
-$requete = $pdo->query($sql);
+foreach($lignes as $ligne){
 
-while($ligne = $requete->fetch(PDO::FETCH_ASSOC)){
+    $niveauCours = $ligne["niveau"];
+    $niveauTaux = niveauTauxDepuisNiveauCours($niveauCours);
+
+    $taux = 0;
+
+    if($niveauTaux !== null){
+        $stmtTaux->execute([
+            $ligne["statut"],
+            $ligne["id_grade"],
+            $niveauTaux,
+            $idAnnee
+        ]);
+
+        $tauxTrouve = $stmtTaux->fetch(PDO::FETCH_ASSOC);
+        $taux = (float)($tauxTrouve["montant"] ?? 0);
+    }
 
     $volumeValide = (float)$ligne["volume_total"];
     $charge = (float)($ligne["charge_statutaire"] ?? 0);
-    $taux = (float)($ligne["taux_horaire"] ?? 0);
 
     if($ligne["statut"] === "VACATAIRE"){
         $heuresPayables = $volumeValide;
@@ -83,13 +170,15 @@ while($ligne = $requete->fetch(PDO::FETCH_ASSOC)){
     }
 
     $montantPayer = $heuresPayables * $taux;
+    $totalMontant += $montantPayer;
 
     echo "
     <tr>
         <td>".htmlspecialchars($ligne["nom"] . " " . $ligne["prenoms"])."</td>
         <td>".htmlspecialchars($ligne["libelle_grade"] ?? "Non défini")."</td>
         <td>".htmlspecialchars($ligne["statut"])."</td>
-        <td>".htmlspecialchars($ligne["niveau"])."</td>
+        <td>".htmlspecialchars($niveauCours ?? "Non défini")."</td>
+        <td>".htmlspecialchars($niveauTaux ?? "Non défini")."</td>
         <td>".number_format($volumeValide, 2, ",", " ")." h</td>
         <td>".$chargeAffichee."</td>
         <td>".number_format($heuresPayables, 2, ",", " ")." h</td>
@@ -99,5 +188,12 @@ while($ligne = $requete->fetch(PDO::FETCH_ASSOC)){
     ";
 }
 
-echo "</table>";
+echo "
+    <tr>
+        <td colspan='9'><strong>Montant total</strong></td>
+        <td><strong>".number_format($totalMontant, 0, ",", " ")." FCFA</strong></td>
+    </tr>
+</table>
+";
+
 exit;

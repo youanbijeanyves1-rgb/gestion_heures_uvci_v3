@@ -21,21 +21,23 @@ $sql = "
         e.actif,
         g.libelle_grade,
         d.nom_departement,
+        u.login AS compte_utilisateur,
         GROUP_CONCAT(
-        CONCAT(t.categorie, ' : ', FORMAT(t.montant,0), ' FCFA')
-        SEPARATOR ' | '
-        ) AS taux_horaires,
-        u.login AS compte_utilisateur
+            DISTINCT CONCAT(t.niveau, ' : ', FORMAT(t.montant, 0), ' FCFA')
+            ORDER BY t.niveau
+            SEPARATOR ' | '
+        ) AS taux_horaires
     FROM enseignant e
     JOIN grade g ON g.id_grade = e.id_grade
     JOIN departement d ON d.id_departement = e.id_departement
     LEFT JOIN enseignant_taux_horaire eth 
-    ON eth.id_enseignant = e.id_enseignant
+        ON eth.id_enseignant = e.id_enseignant
+       AND eth.actif = 1
     LEFT JOIN taux_horaire t 
-    ON t.id_taux = eth.id_taux
-    LEFT JOIN utilisateur u ON u.id_utilisateur = e.id_utilisateur
-    GROUP BY e.id_enseignant
-    ORDER BY e.nom ASC, e.prenoms ASC
+        ON t.id_taux = eth.id_taux
+       AND t.actif = 1
+    LEFT JOIN utilisateur u 
+        ON u.id_utilisateur = e.id_utilisateur
 ";
 
 $params = [];
@@ -49,12 +51,26 @@ if($recherche !== ""){
            OR g.libelle_grade LIKE :recherche
            OR d.nom_departement LIKE :recherche
            OR e.statut LIKE :recherche
+           OR u.login LIKE :recherche
     ";
 
     $params["recherche"] = "%".$recherche."%";
 }
 
-$sql .= " ORDER BY e.nom ASC, e.prenoms ASC";
+$sql .= "
+    GROUP BY 
+        e.id_enseignant,
+        e.nom,
+        e.prenoms,
+        e.email,
+        e.telephone,
+        e.statut,
+        e.actif,
+        g.libelle_grade,
+        d.nom_departement,
+        u.login
+    ORDER BY e.nom ASC, e.prenoms ASC
+";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
@@ -120,7 +136,7 @@ $enseignants = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <th>Grade</th>
                                 <th>Statut</th>
                                 <th>Département</th>
-                                <th>Taux horaire</th>
+                                <th>Taux horaires</th>
                                 <th>Coordonnées</th>
                                 <th>Compte lié</th>
                                 <th>État</th>
@@ -135,8 +151,7 @@ $enseignants = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <tr>
                                         <td>
                                             <strong>
-                                                <?= htmlspecialchars($enseignant["nom"]) ?>
-                                                <?= htmlspecialchars($enseignant["prenoms"]) ?>
+                                                <?= htmlspecialchars($enseignant["nom"] . " " . $enseignant["prenoms"]) ?>
                                             </strong>
                                         </td>
 
@@ -153,7 +168,11 @@ $enseignants = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                         <td><?= htmlspecialchars($enseignant["nom_departement"]) ?></td>
 
                                         <td>
-                                            <?= htmlspecialchars($enseignant["taux_horaires"] ?? "Aucun taux") ?>
+                                            <?php if(!empty($enseignant["taux_horaires"])): ?>
+                                                <?= htmlspecialchars($enseignant["taux_horaires"]) ?>
+                                            <?php else: ?>
+                                                <span class="badge danger">Aucun taux</span>
+                                            <?php endif; ?>
                                         </td>
 
                                         <td>
@@ -227,8 +246,7 @@ $enseignants = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <div class="teacher-card-header">
                                     <div>
                                         <h3>
-                                            <?= htmlspecialchars($enseignant["nom"]) ?>
-                                            <?= htmlspecialchars($enseignant["prenoms"]) ?>
+                                            <?= htmlspecialchars($enseignant["nom"] . " " . $enseignant["prenoms"]) ?>
                                         </h3>
                                         <p><?= htmlspecialchars($enseignant["libelle_grade"]) ?></p>
                                     </div>
@@ -243,7 +261,10 @@ $enseignants = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <div class="teacher-info">
                                     <p><strong>Statut :</strong> <?= htmlspecialchars($enseignant["statut"]) ?></p>
                                     <p><strong>Département :</strong> <?= htmlspecialchars($enseignant["nom_departement"]) ?></p>
-                                    <p><strong>Taux :</strong> <?= number_format($enseignant["montant"], 0, ',', ' ') ?> FCFA</p>
+                                    <p>
+                                        <strong>Taux horaires :</strong>
+                                        <?= !empty($enseignant["taux_horaires"]) ? htmlspecialchars($enseignant["taux_horaires"]) : "Aucun taux" ?>
+                                    </p>
                                     <p><strong>Email :</strong> <?= htmlspecialchars($enseignant["email"]) ?></p>
                                     <p><strong>Téléphone :</strong> <?= htmlspecialchars($enseignant["telephone"]) ?></p>
                                     <p>

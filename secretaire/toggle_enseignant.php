@@ -21,4 +21,12 @@ $nouveauStatut = ($action === "activer") ? 1 : 0;
 $stmt = $pdo->prepare("
     UPDATE enseignant
     SET actif = :actif
-    WHERE id_enseignant = :
+    WHERE id_enseignant = :id_enseignant");
+
+$stmt->execute([
+    "actif" => $nouveauStatut,
+    "id_enseignant" => $id
+]);
+
+header("Location: liste_enseignants.php");
+exit;

@@ -8,50 +8,225 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
     exit;
 }
 
-$recherche = trim($_GET["recherche"] ?? "");
+$message = "";
+$typeMessage = "";
 
-$sql = "
-    SELECT 
-        e.id_enseignant,
-        e.nom,
-        e.prenoms,
-        e.email,
-        e.telephone,
-        e.statut,
-        e.actif,
-        g.libelle_grade,
-        d.nom_departement,
-        t.categorie AS categorie_taux,
-        t.montant,
-        u.login AS compte_utilisateur
-    FROM enseignant e
-    JOIN grade g ON g.id_grade = e.id_grade
-    JOIN departement d ON d.id_departement = e.id_departement
-    JOIN taux_horaire t ON t.id_taux = e.id_taux
-    LEFT JOIN utilisateur u ON u.id_utilisateur = e.id_utilisateur
-";
+$idEnseignant = (int)($_GET["id"] ?? 0);
 
-$params = [];
-
-if($recherche !== ""){
-    $sql .= "
-        WHERE e.nom LIKE :recherche
-           OR e.prenoms LIKE :recherche
-           OR e.email LIKE :recherche
-           OR e.telephone LIKE :recherche
-           OR g.libelle_grade LIKE :recherche
-           OR d.nom_departement LIKE :recherche
-           OR e.statut LIKE :recherche
-    ";
-
-    $params["recherche"] = "%".$recherche."%";
+if($idEnseignant <= 0){
+    header("Location: liste_enseignants.php");
+    exit;
 }
 
-$sql .= " ORDER BY e.nom ASC, e.prenoms ASC";
+$stmtEns = $pdo->prepare("
+    SELECT *
+    FROM enseignant
+    WHERE id_enseignant = ?
+    LIMIT 1
+");
+$stmtEns->execute([$idEnseignant]);
+$enseignant = $stmtEns->fetch(PDO::FETCH_ASSOC);
 
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$enseignants = $stmt->fetchAll(PDO::FETCH_ASSOC);
+if(!$enseignant){
+    header("Location: liste_enseignants.php");
+    exit;
+}
+
+$grades = $pdo->query("
+    SELECT id_grade, libelle_grade 
+    FROM grade 
+    ORDER BY libelle_grade
+")->fetchAll(PDO::FETCH_ASSOC);
+
+$departements = $pdo->query("
+    SELECT id_departement, nom_departement 
+    FROM departement 
+    WHERE actif = 1 
+    ORDER BY nom_departement
+")->fetchAll(PDO::FETCH_ASSOC);
+
+$tauxHoraires = $pdo->query("
+    SELECT 
+        th.id_taux,
+        th.statut,
+        th.niveau,
+        th.categorie,
+        th.montant,
+        g.libelle_grade,
+        a.libelle_annee
+    FROM taux_horaire th
+    JOIN grade g ON g.id_grade = th.id_grade
+    JOIN annee_academique a ON a.id_annee = th.id_annee
+    WHERE th.actif = 1
+    ORDER BY th.statut, g.libelle_grade, th.niveau
+")->fetchAll(PDO::FETCH_ASSOC);
+
+$comptesEnseignants = $pdo->prepare("
+    SELECT u.id_utilisateur, u.login
+    FROM utilisateur u
+    JOIN role r ON r.id_role = u.id_role
+    LEFT JOIN enseignant e ON e.id_utilisateur = u.id_utilisateur
+    WHERE r.libelle_role = 'ENSEIGNANT'
+      AND u.actif = 1
+      AND (
+            e.id_enseignant IS NULL
+            OR e.id_enseignant = ?
+          )
+    ORDER BY u.login
+");
+$comptesEnseignants->execute([$idEnseignant]);
+$comptesEnseignants = $comptesEnseignants->fetchAll(PDO::FETCH_ASSOC);
+
+$stmtTauxActuels = $pdo->prepare("
+    SELECT id_taux
+    FROM enseignant_taux_horaire
+    WHERE id_enseignant = ?
+      AND actif = 1
+");
+$stmtTauxActuels->execute([$idEnseignant]);
+$tauxActuels = $stmtTauxActuels->fetchAll(PDO::FETCH_COLUMN);
+
+if($_SERVER["REQUEST_METHOD"] === "POST"){
+
+    $nom = trim($_POST["nom"] ?? "");
+    $prenoms = trim($_POST["prenoms"] ?? "");
+    $email = trim($_POST["email"] ?? "");
+    $telephone = trim($_POST["telephone"] ?? "");
+    $statut = $_POST["statut"] ?? "";
+    $idGrade = $_POST["id_grade"] ?? "";
+    $idDepartement = $_POST["id_departement"] ?? "";
+    $idUtilisateur = $_POST["id_utilisateur"] ?? null;
+    $idTauxSelectionnes = $_POST["id_taux"] ?? [];
+
+    if($idUtilisateur === ""){
+        $idUtilisateur = null;
+    }
+
+    if(!is_array($idTauxSelectionnes)){
+        $idTauxSelectionnes = [$idTauxSelectionnes];
+    }
+
+    $idTauxSelectionnes = array_values(array_filter($idTauxSelectionnes));
+
+    if(
+        $nom === "" ||
+        $prenoms === "" ||
+        $email === "" ||
+        $telephone === "" ||
+        $statut === "" ||
+        $idGrade === "" ||
+        $idDepartement === "" ||
+        empty($idTauxSelectionnes)
+    ){
+        $message = "Veuillez remplir tous les champs obligatoires.";
+        $typeMessage = "error";
+    }
+    elseif(!filter_var($email, FILTER_VALIDATE_EMAIL)){
+        $message = "L'adresse email n'est pas valide.";
+        $typeMessage = "error";
+    }
+    elseif(!in_array($statut, ["PERMANENT", "VACATAIRE"])){
+        $message = "Statut invalide.";
+        $typeMessage = "error";
+    }
+    else{
+
+        $verifEmail = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM enseignant 
+            WHERE email = ?
+              AND id_enseignant <> ?
+        ");
+        $verifEmail->execute([$email, $idEnseignant]);
+
+        if($verifEmail->fetchColumn() > 0){
+            $message = "Cet email est déjà utilisé par un autre enseignant.";
+            $typeMessage = "error";
+        }else{
+
+            try{
+
+                $pdo->beginTransaction();
+
+                $idTauxPrincipal = $idTauxSelectionnes[0];
+
+                $stmtUpdate = $pdo->prepare("
+                    UPDATE enseignant
+                    SET
+                        nom = :nom,
+                        prenoms = :prenoms,
+                        email = :email,
+                        telephone = :telephone,
+                        statut = :statut,
+                        id_departement = :id_departement,
+                        id_grade = :id_grade,
+                        id_taux = :id_taux,
+                        id_utilisateur = :id_utilisateur
+                    WHERE id_enseignant = :id_enseignant
+                ");
+
+                $stmtUpdate->execute([
+                    "nom" => $nom,
+                    "prenoms" => $prenoms,
+                    "email" => $email,
+                    "telephone" => $telephone,
+                    "statut" => $statut,
+                    "id_departement" => $idDepartement,
+                    "id_grade" => $idGrade,
+                    "id_taux" => $idTauxPrincipal,
+                    "id_utilisateur" => $idUtilisateur,
+                    "id_enseignant" => $idEnseignant
+                ]);
+
+                $stmtDeleteTaux = $pdo->prepare("
+                    DELETE FROM enseignant_taux_horaire
+                    WHERE id_enseignant = ?
+                ");
+                $stmtDeleteTaux->execute([$idEnseignant]);
+
+                $stmtInsertTaux = $pdo->prepare("
+                    INSERT INTO enseignant_taux_horaire(
+                        id_enseignant,
+                        id_taux,
+                        actif
+                    )
+                    VALUES(
+                        :id_enseignant,
+                        :id_taux,
+                        1
+                    )
+                ");
+
+                foreach($idTauxSelectionnes as $idTaux){
+                    $stmtInsertTaux->execute([
+                        "id_enseignant" => $idEnseignant,
+                        "id_taux" => $idTaux
+                    ]);
+                }
+
+                $pdo->commit();
+
+                $message = "Enseignant modifié avec succès.";
+                $typeMessage = "success";
+
+                $stmtEns->execute([$idEnseignant]);
+                $enseignant = $stmtEns->fetch(PDO::FETCH_ASSOC);
+
+                $stmtTauxActuels->execute([$idEnseignant]);
+                $tauxActuels = $stmtTauxActuels->fetchAll(PDO::FETCH_COLUMN);
+
+            }catch(Exception $e){
+
+                if($pdo->inTransaction()){
+                    $pdo->rollBack();
+                }
+
+                $message = "Erreur lors de la modification : " . $e->getMessage();
+                $typeMessage = "error";
+            }
+        }
+    }
+}
 
 ?>
 
@@ -65,8 +240,8 @@ $enseignants = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         <header class="topbar">
             <div>
-                <h1>Liste des enseignants</h1>
-                <p>Consultation, recherche et gestion administrative des enseignants.</p>
+                <h1>Modification d’un enseignant</h1>
+                <p>Modifier les informations administratives et les taux horaires associés.</p>
             </div>
 
             <div class="user-box">
@@ -78,213 +253,156 @@ $enseignants = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         <section class="content">
 
-            <div class="table-card">
+            <div class="form-card">
 
-                <div class="table-header">
+                <?php if($message !== ""): ?>
+                    <div class="alert <?= htmlspecialchars($typeMessage) ?>">
+                        <?= htmlspecialchars($message) ?>
+                    </div>
+                <?php endif; ?>
 
-                    <form method="GET" class="search-form">
-                        <input
-                            type="text"
-                            name="recherche"
-                            placeholder="Rechercher un enseignant..."
-                            value="<?= htmlspecialchars($recherche) ?>"
+                <form method="POST">
+
+                    <div class="form-group">
+                        <label>Nom <span>*</span></label>
+                        <input 
+                            type="text" 
+                            name="nom" 
+                            required
+                            value="<?= htmlspecialchars($enseignant["nom"]) ?>"
                         >
+                    </div>
 
+                    <div class="form-group">
+                        <label>Prénoms <span>*</span></label>
+                        <input 
+                            type="text" 
+                            name="prenoms" 
+                            required
+                            value="<?= htmlspecialchars($enseignant["prenoms"]) ?>"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label>Email <span>*</span></label>
+                        <input 
+                            type="email" 
+                            name="email" 
+                            required
+                            value="<?= htmlspecialchars($enseignant["email"]) ?>"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label>Téléphone <span>*</span></label>
+                        <input 
+                            type="text" 
+                            name="telephone" 
+                            required
+                            value="<?= htmlspecialchars($enseignant["telephone"]) ?>"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label>Statut <span>*</span></label>
+                        <select name="statut" required>
+                            <option value="">-- Sélectionner le statut --</option>
+
+                            <option value="PERMANENT" <?= $enseignant["statut"] === "PERMANENT" ? "selected" : "" ?>>
+                                Permanent
+                            </option>
+
+                            <option value="VACATAIRE" <?= $enseignant["statut"] === "VACATAIRE" ? "selected" : "" ?>>
+                                Vacataire
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Grade <span>*</span></label>
+                        <select name="id_grade" required>
+                            <option value="">-- Sélectionner un grade --</option>
+
+                            <?php foreach($grades as $grade): ?>
+                                <option 
+                                    value="<?= $grade["id_grade"] ?>"
+                                    <?= (string)$enseignant["id_grade"] === (string)$grade["id_grade"] ? "selected" : "" ?>
+                                >
+                                    <?= htmlspecialchars($grade["libelle_grade"]) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Département <span>*</span></label>
+                        <select name="id_departement" required>
+                            <option value="">-- Sélectionner un département --</option>
+
+                            <?php foreach($departements as $departement): ?>
+                                <option 
+                                    value="<?= $departement["id_departement"] ?>"
+                                    <?= (string)$enseignant["id_departement"] === (string)$departement["id_departement"] ? "selected" : "" ?>
+                                >
+                                    <?= htmlspecialchars($departement["nom_departement"]) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Taux horaires <span>*</span></label>
+                        <small>
+                            Maintenir CTRL pour sélectionner plusieurs taux horaires si nécessaire.
+                        </small>
+
+                        <select name="id_taux[]" multiple required size="7">
+                            <?php foreach($tauxHoraires as $taux): ?>
+                                <option 
+                                    value="<?= $taux["id_taux"] ?>"
+                                    <?= in_array($taux["id_taux"], $tauxActuels) ? "selected" : "" ?>
+                                >
+                                    <?= htmlspecialchars($taux["libelle_annee"]) ?>
+                                    —
+                                    <?= htmlspecialchars($taux["statut"]) ?>
+                                    —
+                                    <?= htmlspecialchars($taux["libelle_grade"]) ?>
+                                    —
+                                    <?= htmlspecialchars($taux["niveau"]) ?>
+                                    —
+                                    <?= number_format($taux["montant"], 0, ',', ' ') ?> FCFA
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Compte utilisateur lié</label>
+                        <select name="id_utilisateur">
+                            <option value="">Aucun compte lié</option>
+
+                            <?php foreach($comptesEnseignants as $compte): ?>
+                                <option 
+                                    value="<?= $compte["id_utilisateur"] ?>"
+                                    <?= (string)($enseignant["id_utilisateur"] ?? "") === (string)$compte["id_utilisateur"] ? "selected" : "" ?>
+                                >
+                                    <?= htmlspecialchars($compte["login"]) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="form-actions">
                         <button type="submit" class="btn-primary">
-                            Rechercher
+                            Enregistrer les modifications
                         </button>
 
                         <a href="liste_enseignants.php" class="btn-secondary">
-                            Réinitialiser
+                            Retour
                         </a>
-                    </form>
+                    </div>
 
-                    <a href="creer_enseignant.php" class="btn-primary">
-                        + Nouvel enseignant
-                    </a>
-
-                </div>
-
-                <div class="desktop-table">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Nom & prénoms</th>
-                                <th>Grade</th>
-                                <th>Statut</th>
-                                <th>Département</th>
-                                <th>Taux horaire</th>
-                                <th>Coordonnées</th>
-                                <th>Compte lié</th>
-                                <th>État</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            <?php if(count($enseignants) > 0): ?>
-
-                                <?php foreach($enseignants as $enseignant): ?>
-                                    <tr>
-                                        <td>
-                                            <strong>
-                                                <?= htmlspecialchars($enseignant["nom"]) ?>
-                                                <?= htmlspecialchars($enseignant["prenoms"]) ?>
-                                            </strong>
-                                        </td>
-
-                                        <td><?= htmlspecialchars($enseignant["libelle_grade"]) ?></td>
-
-                                        <td>
-                                            <?php if($enseignant["statut"] === "PERMANENT"): ?>
-                                                <span class="badge success">PERMANENT</span>
-                                            <?php else: ?>
-                                                <span class="badge warning">VACATAIRE</span>
-                                            <?php endif; ?>
-                                        </td>
-
-                                        <td><?= htmlspecialchars($enseignant["nom_departement"]) ?></td>
-
-                                        <td>
-                                            <?= htmlspecialchars($enseignant["categorie_taux"]) ?><br>
-                                            <strong>
-                                                <?= number_format($enseignant["montant"], 0, ',', ' ') ?> FCFA
-                                            </strong>
-                                        </td>
-
-                                        <td>
-                                            <?= htmlspecialchars($enseignant["email"]) ?><br>
-                                            <small><?= htmlspecialchars($enseignant["telephone"]) ?></small>
-                                        </td>
-
-                                        <td>
-                                            <?php if($enseignant["compte_utilisateur"]): ?>
-                                                <span class="badge success">
-                                                    <?= htmlspecialchars($enseignant["compte_utilisateur"]) ?>
-                                                </span>
-                                            <?php else: ?>
-                                                <span class="badge neutral">Aucun</span>
-                                            <?php endif; ?>
-                                        </td>
-
-                                        <td>
-                                            <?php if($enseignant["actif"]): ?>
-                                                <span class="badge success">ACTIF</span>
-                                            <?php else: ?>
-                                                <span class="badge danger">INACTIF</span>
-                                            <?php endif; ?>
-                                        </td>
-
-                                        <td class="actions">
-                                            <a href="modifier_enseignant.php?id=<?= $enseignant["id_enseignant"] ?>" class="btn-small">
-                                                Modifier
-                                            </a>
-
-                                            <?php if($enseignant["actif"]): ?>
-                                                <a
-                                                    href="toggle_enseignant.php?id=<?= $enseignant["id_enseignant"] ?>&action=desactiver"
-                                                    class="btn-small danger"
-                                                    onclick="return confirm('Voulez-vous vraiment désactiver cet enseignant ?');"
-                                                >
-                                                    Désactiver
-                                                </a>
-                                            <?php else: ?>
-                                                <a
-                                                    href="toggle_enseignant.php?id=<?= $enseignant["id_enseignant"] ?>&action=activer"
-                                                    class="btn-small success"
-                                                    onclick="return confirm('Voulez-vous vraiment réactiver cet enseignant ?');"
-                                                >
-                                                    Activer
-                                                </a>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="9" class="empty">
-                                        Aucun enseignant trouvé.
-                                    </td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="mobile-cards">
-
-                    <?php if(count($enseignants) > 0): ?>
-
-                        <?php foreach($enseignants as $enseignant): ?>
-
-                            <div class="teacher-card">
-
-                                <div class="teacher-card-header">
-                                    <div>
-                                        <h3>
-                                            <?= htmlspecialchars($enseignant["nom"]) ?>
-                                            <?= htmlspecialchars($enseignant["prenoms"]) ?>
-                                        </h3>
-                                        <p><?= htmlspecialchars($enseignant["libelle_grade"]) ?></p>
-                                    </div>
-
-                                    <?php if($enseignant["actif"]): ?>
-                                        <span class="badge success">ACTIF</span>
-                                    <?php else: ?>
-                                        <span class="badge danger">INACTIF</span>
-                                    <?php endif; ?>
-                                </div>
-
-                                <div class="teacher-info">
-                                    <p><strong>Statut :</strong> <?= htmlspecialchars($enseignant["statut"]) ?></p>
-                                    <p><strong>Département :</strong> <?= htmlspecialchars($enseignant["nom_departement"]) ?></p>
-                                    <p><strong>Taux :</strong> <?= number_format($enseignant["montant"], 0, ',', ' ') ?> FCFA</p>
-                                    <p><strong>Email :</strong> <?= htmlspecialchars($enseignant["email"]) ?></p>
-                                    <p><strong>Téléphone :</strong> <?= htmlspecialchars($enseignant["telephone"]) ?></p>
-                                    <p>
-                                        <strong>Compte :</strong>
-                                        <?= $enseignant["compte_utilisateur"] ? htmlspecialchars($enseignant["compte_utilisateur"]) : "Aucun" ?>
-                                    </p>
-                                </div>
-
-                                <div class="actions">
-                                    <a href="modifier_enseignant.php?id=<?= $enseignant["id_enseignant"] ?>" class="btn-small">
-                                        Modifier
-                                    </a>
-
-                                    <?php if($enseignant["actif"]): ?>
-                                        <a
-                                            href="toggle_enseignant.php?id=<?= $enseignant["id_enseignant"] ?>&action=desactiver"
-                                            class="btn-small danger"
-                                            onclick="return confirm('Voulez-vous vraiment désactiver cet enseignant ?');"
-                                        >
-                                            Désactiver
-                                        </a>
-                                    <?php else: ?>
-                                        <a
-                                            href="toggle_enseignant.php?id=<?= $enseignant["id_enseignant"] ?>&action=activer"
-                                            class="btn-small success"
-                                            onclick="return confirm('Voulez-vous vraiment réactiver cet enseignant ?');"
-                                        >
-                                            Activer
-                                        </a>
-                                    <?php endif; ?>
-                                </div>
-
-                            </div>
-
-                        <?php endforeach; ?>
-
-                    <?php else: ?>
-
-                        <div class="empty">
-                            Aucun enseignant trouvé.
-                        </div>
-
-                    <?php endif; ?>
-
-                </div>
+                </form>
 
             </div>
 
