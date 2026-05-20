@@ -273,7 +273,7 @@ $totalActivites = count($activites);
             </p>
         </div>
 
-        <a href="dashboard.php" class="btn-back">← Retour au dashboard</a>
+        <a href="dashboard.php" class="btn-back">Retour au dashboard</a>
     </div>
 
     <div class="filter-card">

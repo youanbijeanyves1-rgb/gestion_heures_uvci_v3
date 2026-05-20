@@ -11,22 +11,34 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
 $message = "";
 $typeMessage = "";
 
-$grades = $pdo->query("SELECT id_grade, libelle_grade FROM grade ORDER BY libelle_grade")
-              ->fetchAll(PDO::FETCH_ASSOC);
+$grades = $pdo->query("
+    SELECT id_grade, libelle_grade 
+    FROM grade 
+    ORDER BY libelle_grade
+")->fetchAll(PDO::FETCH_ASSOC);
 
-$departements = $pdo->query("SELECT id_departement, nom_departement FROM departement WHERE actif = 1 ORDER BY nom_departement")
-                    ->fetchAll(PDO::FETCH_ASSOC);
+$departements = $pdo->query("
+    SELECT id_departement, nom_departement 
+    FROM departement 
+    WHERE actif = 1 
+    ORDER BY nom_departement
+")->fetchAll(PDO::FETCH_ASSOC);
 
 $tauxHoraires = $pdo->query("
     SELECT 
-        id_taux,
-        statut,
-        niveau,
-        categorie,
-        montant
-    FROM taux_horaire
-    WHERE actif = 1
-    ORDER BY statut, niveau, categorie
+        th.id_taux,
+        th.statut,
+        th.niveau,
+        th.montant,
+        g.libelle_grade
+    FROM taux_horaire th
+    LEFT JOIN grade g 
+        ON g.id_grade = th.id_grade
+    WHERE th.actif = 1
+    ORDER BY 
+        th.statut,
+        th.niveau,
+        g.libelle_grade
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $comptesEnseignants = $pdo->query("
@@ -60,7 +72,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
         $idTauxSelectionnes = [$idTauxSelectionnes];
     }
 
-    $idTauxSelectionnes = array_filter($idTauxSelectionnes);
+    $idTauxSelectionnes = array_values(array_filter($idTauxSelectionnes));
 
     if(
         $nom === "" ||
@@ -85,50 +97,52 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
     }
     else{
 
-        $verifEmail = $pdo->prepare("SELECT COUNT(*) FROM enseignant WHERE email = ?");
+        $verifEmail = $pdo->prepare("
+            SELECT COUNT(*) 
+            FROM enseignant 
+            WHERE email = ?
+        ");
         $verifEmail->execute([$email]);
 
         if($verifEmail->fetchColumn() > 0){
+
             $message = "Cet email est déjà utilisé par un autre enseignant.";
             $typeMessage = "error";
+
         }else{
 
             try{
 
                 $pdo->beginTransaction();
 
-                /*
-                    Compatibilité :
-                    La colonne enseignant.id_taux existe encore.
-                    On y met le premier taux sélectionné pour ne pas casser l'ancien modèle.
-                    Mais les vrais taux multiples sont enregistrés dans enseignant_taux_horaire.
-                */
                 $idTauxPrincipal = $idTauxSelectionnes[0];
 
-                $sql = "INSERT INTO enseignant(
-                            nom,
-                            prenoms,
-                            email,
-                            telephone,
-                            statut,
-                            actif,
-                            id_departement,
-                            id_grade,
-                            id_taux,
-                            id_utilisateur
-                        )
-                        VALUES(
-                            :nom,
-                            :prenoms,
-                            :email,
-                            :telephone,
-                            :statut,
-                            1,
-                            :id_departement,
-                            :id_grade,
-                            :id_taux,
-                            :id_utilisateur
-                        )";
+                $sql = "
+                    INSERT INTO enseignant(
+                        nom,
+                        prenoms,
+                        email,
+                        telephone,
+                        statut,
+                        actif,
+                        id_departement,
+                        id_grade,
+                        id_taux,
+                        id_utilisateur
+                    )
+                    VALUES(
+                        :nom,
+                        :prenoms,
+                        :email,
+                        :telephone,
+                        :statut,
+                        1,
+                        :id_departement,
+                        :id_grade,
+                        :id_taux,
+                        :id_utilisateur
+                    )
+                ";
 
                 $stmt = $pdo->prepare($sql);
 
@@ -187,6 +201,20 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
 ?>
 
 <?php require_once "../includes/header.php"; ?>
+
+<style>
+    select[multiple]{
+        min-height: 160px;
+        padding: 8px;
+        overflow-y: auto;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    select[multiple] option{
+        padding: 6px;
+    }
+</style>
 
 <div class="wrapper">
 
@@ -276,19 +304,20 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
 
                     <div class="form-group">
                         <label>Taux horaires <span>*</span></label>
+
                         <small>
                             Maintenir la touche CTRL pour sélectionner plusieurs taux horaires
                             Licence et Master si nécessaire.
                         </small>
 
-                        <select name="id_taux[]" multiple required size="6">
+                        <select name="id_taux[]" multiple required size="7">
                             <?php foreach($tauxHoraires as $taux): ?>
                                 <option value="<?= htmlspecialchars($taux["id_taux"]) ?>">
                                     <?= htmlspecialchars($taux["statut"]) ?>
                                     —
                                     <?= htmlspecialchars($taux["niveau"]) ?>
                                     —
-                                    <?= htmlspecialchars($taux["categorie"]) ?>
+                                    <?= htmlspecialchars($taux["libelle_grade"] ?? "Sans grade") ?>
                                     —
                                     <?= number_format($taux["montant"], 0, ',', ' ') ?> FCFA
                                 </option>

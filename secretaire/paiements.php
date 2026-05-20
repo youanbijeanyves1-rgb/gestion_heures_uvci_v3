@@ -98,6 +98,34 @@ $stmtTaux = $pdo->prepare("
     LIMIT 1
 ");
 
+/*
+|--------------------------------------------------------------------------
+| CALCUL GLOBAL PAR ENSEIGNANT
+|--------------------------------------------------------------------------
+*/
+
+$totauxParEnseignant = [];
+
+foreach($lignes as $ligne){
+    $id = $ligne["id_enseignant"];
+
+    if(!isset($totauxParEnseignant[$id])){
+        $totauxParEnseignant[$id] = [
+            "volume_total" => 0,
+            "charge_statutaire" => (float)($ligne["charge_statutaire"] ?? 0),
+            "statut" => $ligne["statut"]
+        ];
+    }
+
+    $totauxParEnseignant[$id]["volume_total"] += (float)$ligne["volume_total"];
+}
+
+/*
+|--------------------------------------------------------------------------
+| CALCUL PAR LIGNE AVEC RÉPARTITION PROPORTIONNELLE
+|--------------------------------------------------------------------------
+*/
+
 $totalGeneral = 0;
 $totalVolume = 0;
 $totalPayable = 0;
@@ -105,8 +133,14 @@ $totalEnseignants = [];
 
 foreach($lignes as &$l){
 
+    $id = $l["id_enseignant"];
     $niveauCours = $l["niveau"];
     $niveauTaux = niveauTauxDepuisNiveauCours($niveauCours);
+
+    $volumeLigne = (float)$l["volume_total"];
+    $volumeGlobalEnseignant = $totauxParEnseignant[$id]["volume_total"];
+    $charge = $totauxParEnseignant[$id]["charge_statutaire"];
+    $statut = $totauxParEnseignant[$id]["statut"];
 
     $taux = 0;
 
@@ -122,26 +156,31 @@ foreach($lignes as &$l){
         $taux = (float)($tauxTrouve["montant"] ?? 0);
     }
 
-    $volume = (float)$l["volume_total"];
-
-    if($l["statut"] === "VACATAIRE"){
-        $heuresPayables = $volume;
+    if($statut === "VACATAIRE"){
+        $heuresPayables = $volumeLigne;
     }else{
-        $charge = (float)($l["charge_statutaire"] ?? 0);
-        $heuresPayables = max(0, $volume - $charge);
+        $heuresComplementairesGlobales = max(0, $volumeGlobalEnseignant - $charge);
+
+        if($volumeGlobalEnseignant > 0){
+            $proportion = $volumeLigne / $volumeGlobalEnseignant;
+            $heuresPayables = $heuresComplementairesGlobales * $proportion;
+        }else{
+            $heuresPayables = 0;
+        }
     }
 
     $montant = $heuresPayables * $taux;
 
     $l["niveau_taux"] = $niveauTaux;
     $l["taux_horaire"] = $taux;
+    $l["volume_global_enseignant"] = $volumeGlobalEnseignant;
     $l["heures_payables"] = $heuresPayables;
     $l["montant_a_payer"] = $montant;
 
-    $totalVolume += $volume;
+    $totalVolume += $volumeLigne;
     $totalPayable += $heuresPayables;
     $totalGeneral += $montant;
-    $totalEnseignants[$l["id_enseignant"]] = true;
+    $totalEnseignants[$id] = true;
 }
 unset($l);
 
@@ -288,7 +327,7 @@ $lienExcel = "export_paiement_excel.php?id_annee=" . urlencode($idAnnee)
                         <p>
                             <strong>Règle paiement :</strong>
                             Vacataire = tout le volume validé est payable.
-                            Permanent = seules les heures complémentaires sont payables.
+                            Permanent = les heures complémentaires sont calculées sur le total validé de l’enseignant, puis réparties proportionnellement entre les niveaux.
                         </p>
                     </div>
                 </div>
@@ -306,6 +345,7 @@ $lienExcel = "export_paiement_excel.php?id_annee=" . urlencode($idAnnee)
                                 <th>Niveau taux</th>
                                 <th>Volume validé</th>
                                 <th>Charge statutaire</th>
+                                <th>Volume global</th>
                                 <th>Heures payables</th>
                                 <th>Taux horaire</th>
                                 <th>Montant à payer</th>
@@ -355,6 +395,10 @@ $lienExcel = "export_paiement_excel.php?id_annee=" . urlencode($idAnnee)
                                         </td>
 
                                         <td>
+                                            <?= number_format($l["volume_global_enseignant"], 2, ',', ' ') ?> h
+                                        </td>
+
+                                        <td>
                                             <span class="badge-volume">
                                                 <?= number_format($l["heures_payables"], 2, ',', ' ') ?> h
                                             </span>
@@ -385,7 +429,7 @@ $lienExcel = "export_paiement_excel.php?id_annee=" . urlencode($idAnnee)
                             <?php else: ?>
 
                                 <tr>
-                                    <td colspan="10" class="text-center">
+                                    <td colspan="11" class="text-center">
                                         Aucun état de paiement disponible pour cette période.
                                     </td>
                                 </tr>

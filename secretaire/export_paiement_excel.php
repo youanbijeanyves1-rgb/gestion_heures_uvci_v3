@@ -95,6 +95,31 @@ $stmtTaux = $pdo->prepare("
     LIMIT 1
 ");
 
+/*
+|--------------------------------------------------------------------------
+| TOTAUX GLOBAUX PAR ENSEIGNANT
+|--------------------------------------------------------------------------
+*/
+
+$totauxParEnseignant = [];
+
+foreach($lignes as $ligne){
+
+    $id = $ligne["id_enseignant"];
+
+    if(!isset($totauxParEnseignant[$id])){
+
+        $totauxParEnseignant[$id] = [
+            "volume_total" => 0,
+            "charge_statutaire" => (float)($ligne["charge_statutaire"] ?? 0),
+            "statut" => $ligne["statut"]
+        ];
+    }
+
+    $totauxParEnseignant[$id]["volume_total"] +=
+        (float)$ligne["volume_total"];
+}
+
 header("Content-Type: application/vnd.ms-excel; charset=UTF-8");
 header("Content-Disposition: attachment; filename=etat_paiements.xls");
 header("Pragma: no-cache");
@@ -105,41 +130,74 @@ echo "\xEF\xBB\xBF";
 $periode = "Toutes les périodes";
 
 if($dateDebut !== "" && $dateFin !== ""){
-    $periode = "Du " . date("d/m/Y", strtotime($dateDebut)) . " au " . date("d/m/Y", strtotime($dateFin));
+    $periode = "Du " .
+        date("d/m/Y", strtotime($dateDebut)) .
+        " au " .
+        date("d/m/Y", strtotime($dateFin));
 }
 
 echo "
 <table border='1'>
-    <tr>
-        <th colspan='10' style='font-size:18px;'>ÉTAT GLOBAL DES PAIEMENTS</th>
-    </tr>
-    <tr>
-        <td colspan='10'><strong>Année académique :</strong> ".htmlspecialchars($libelleAnnee)."</td>
-    </tr>
-    <tr>
-        <td colspan='10'><strong>Période :</strong> ".htmlspecialchars($periode)."</td>
-    </tr>
-    <tr>
-        <td colspan='10'><strong>Date d’édition :</strong> ".date("d/m/Y à H:i")."</td>
-    </tr>
-    <tr></tr>
-    <tr>
-        <th>Enseignant</th>
-        <th>Grade</th>
-        <th>Statut</th>
-        <th>Niveau cours</th>
-        <th>Niveau taux</th>
-        <th>Volume validé</th>
-        <th>Charge statutaire</th>
-        <th>Heures payables</th>
-        <th>Taux horaire</th>
-        <th>Montant à payer</th>
-    </tr>
+
+<tr>
+    <th colspan='11' style='font-size:18px;'>
+        ÉTAT GLOBAL DES PAIEMENTS
+    </th>
+</tr>
+
+<tr>
+    <td colspan='11'>
+        <strong>Année académique :</strong>
+        ".htmlspecialchars($libelleAnnee)."
+    </td>
+</tr>
+
+<tr>
+    <td colspan='11'>
+        <strong>Période :</strong>
+        ".htmlspecialchars($periode)."
+    </td>
+</tr>
+
+<tr>
+    <td colspan='11'>
+        <strong>Date d’édition :</strong>
+        ".date("d/m/Y à H:i")."
+    </td>
+</tr>
+
+<tr>
+    <td colspan='11'>
+        <strong>Règle paiement :</strong>
+        Vacataire = tout le volume validé est payable ;
+        Permanent = les heures complémentaires sont calculées globalement puis réparties proportionnellement entre les niveaux.
+    </td>
+</tr>
+
+<tr></tr>
+
+<tr>
+    <th>Enseignant</th>
+    <th>Grade</th>
+    <th>Statut</th>
+    <th>Niveau cours</th>
+    <th>Niveau taux</th>
+    <th>Volume validé</th>
+    <th>Charge statutaire</th>
+    <th>Volume global</th>
+    <th>Heures payables</th>
+    <th>Taux horaire</th>
+    <th>Montant à payer</th>
+</tr>
 ";
 
 $totalMontant = 0;
+$totalVolume = 0;
+$totalPayable = 0;
 
 foreach($lignes as $ligne){
+
+    $id = $ligne["id_enseignant"];
 
     $niveauCours = $ligne["niveau"];
     $niveauTaux = niveauTauxDepuisNiveauCours($niveauCours);
@@ -147,6 +205,7 @@ foreach($lignes as $ligne){
     $taux = 0;
 
     if($niveauTaux !== null){
+
         $stmtTaux->execute([
             $ligne["statut"],
             $ligne["id_grade"],
@@ -155,44 +214,178 @@ foreach($lignes as $ligne){
         ]);
 
         $tauxTrouve = $stmtTaux->fetch(PDO::FETCH_ASSOC);
+
         $taux = (float)($tauxTrouve["montant"] ?? 0);
     }
 
     $volumeValide = (float)$ligne["volume_total"];
-    $charge = (float)($ligne["charge_statutaire"] ?? 0);
+
+    $volumeGlobal =
+        $totauxParEnseignant[$id]["volume_total"];
+
+    $charge =
+        $totauxParEnseignant[$id]["charge_statutaire"];
 
     if($ligne["statut"] === "VACATAIRE"){
+
         $heuresPayables = $volumeValide;
         $chargeAffichee = "Non concerné";
+
     }else{
-        $heuresPayables = max(0, $volumeValide - $charge);
-        $chargeAffichee = number_format($charge, 2, ",", " ") . " h";
+
+        $heuresComplementairesGlobales =
+            max(0, $volumeGlobal - $charge);
+
+        if($volumeGlobal > 0){
+
+            $proportion =
+                $volumeValide / $volumeGlobal;
+
+            $heuresPayables =
+                $heuresComplementairesGlobales * $proportion;
+
+        }else{
+
+            $heuresPayables = 0;
+        }
+
+        $chargeAffichee =
+            number_format($charge, 2, ",", " ") . " h";
     }
 
     $montantPayer = $heuresPayables * $taux;
+
     $totalMontant += $montantPayer;
+    $totalVolume += $volumeValide;
+    $totalPayable += $heuresPayables;
 
     echo "
     <tr>
-        <td>".htmlspecialchars($ligne["nom"] . " " . $ligne["prenoms"])."</td>
-        <td>".htmlspecialchars($ligne["libelle_grade"] ?? "Non défini")."</td>
-        <td>".htmlspecialchars($ligne["statut"])."</td>
-        <td>".htmlspecialchars($niveauCours ?? "Non défini")."</td>
-        <td>".htmlspecialchars($niveauTaux ?? "Non défini")."</td>
-        <td>".number_format($volumeValide, 2, ",", " ")." h</td>
-        <td>".$chargeAffichee."</td>
-        <td>".number_format($heuresPayables, 2, ",", " ")." h</td>
-        <td>".number_format($taux, 0, ",", " ")." FCFA</td>
-        <td>".number_format($montantPayer, 0, ",", " ")." FCFA</td>
+
+        <td>
+            ".htmlspecialchars(
+                $ligne["nom"] . " " . $ligne["prenoms"]
+            )."
+        </td>
+
+        <td>
+            ".htmlspecialchars(
+                $ligne["libelle_grade"] ?? "Non défini"
+            )."
+        </td>
+
+        <td>
+            ".htmlspecialchars($ligne["statut"])."
+        </td>
+
+        <td>
+            ".htmlspecialchars($niveauCours ?? "Non défini")."
+        </td>
+
+        <td>
+            ".htmlspecialchars($niveauTaux ?? "Non défini")."
+        </td>
+
+        <td>
+            ".number_format(
+                $volumeValide,
+                2,
+                ",",
+                " "
+            )." h
+        </td>
+
+        <td>
+            ".$chargeAffichee."
+        </td>
+
+        <td>
+            ".number_format(
+                $volumeGlobal,
+                2,
+                ",",
+                " "
+            )." h
+        </td>
+
+        <td>
+            ".number_format(
+                $heuresPayables,
+                2,
+                ",",
+                " "
+            )." h
+        </td>
+
+        <td>
+            ".number_format(
+                $taux,
+                0,
+                ",",
+                " "
+            )." FCFA
+        </td>
+
+        <td>
+            ".number_format(
+                $montantPayer,
+                0,
+                ",",
+                " "
+            )." FCFA
+        </td>
+
     </tr>
     ";
 }
 
 echo "
-    <tr>
-        <td colspan='9'><strong>Montant total</strong></td>
-        <td><strong>".number_format($totalMontant, 0, ",", " ")." FCFA</strong></td>
-    </tr>
+
+<tr>
+    <td colspan='5'>
+        <strong>TOTAUX</strong>
+    </td>
+
+    <td>
+        <strong>
+            ".number_format(
+                $totalVolume,
+                2,
+                ",",
+                " "
+            )." h
+        </strong>
+    </td>
+
+    <td></td>
+
+    <td></td>
+
+    <td>
+        <strong>
+            ".number_format(
+                $totalPayable,
+                2,
+                ",",
+                " "
+            )." h
+        </strong>
+    </td>
+
+    <td></td>
+
+    <td>
+        <strong>
+            ".number_format(
+                $totalMontant,
+                0,
+                ",",
+                " "
+            )." FCFA
+        </strong>
+    </td>
+</tr>
+
 </table>
 ";
 
