@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Hôte : 127.0.0.1
--- Généré le : mar. 19 mai 2026 à 10:39
+-- Généré le : mer. 20 mai 2026 à 18:03
 -- Version du serveur : 10.4.32-MariaDB
 -- Version de PHP : 8.2.12
 
@@ -129,7 +129,10 @@ INSERT INTO `activite_pedagogique` (`id_activite`, `type_activite`, `niveau_comp
 (3, 'MISE_A_JOUR_RESSOURCE', 'NIVEAU_1', 9.00, 36, 7.20, 'VALIDEE', '2026-05-16 23:15:19', '', 5, 7, 5, 1, 4, 2),
 (4, 'CREATION_RESSOURCE', 'NIVEAU_2', 5.00, 20, 15.00, 'VALIDEE', '2026-05-16 23:17:44', '', 4, 9, 6, 1, 2, 2),
 (5, 'MISE_A_JOUR_RESSOURCE', 'NIVEAU_1', 29.00, 116, 23.20, 'REJETEE', '2026-05-16 23:20:49', '', 5, 8, 7, 1, 4, 2),
-(6, 'CREATION_RESSOURCE', 'NIVEAU_1', 39.50, 158, 63.20, 'REJETEE', '2026-05-16 23:22:49', '', 6, 10, 8, 1, 1, 2);
+(6, 'CREATION_RESSOURCE', 'NIVEAU_1', 39.50, 158, 63.20, 'REJETEE', '2026-05-16 23:22:49', '', 6, 10, 8, 1, 1, 2),
+(7, 'CREATION_RESSOURCE', 'NIVEAU_1', 40.00, 160, 64.00, 'VALIDEE', '2026-05-19 17:53:01', 'RAS', 7, 11, 9, 1, 1, 2),
+(8, 'MISE_A_JOUR_RESSOURCE', 'NIVEAU_3', 39.00, 156, 117.00, 'VALIDEE', '2026-05-19 17:54:00', 'Bon', 7, 12, 10, 1, 6, 2),
+(9, 'CREATION_RESSOURCE', 'NIVEAU_1', 5.00, 20, 8.00, 'VALIDEE', '2026-05-20 13:10:03', 'RAS', 7, 11, 11, 1, 1, 2);
 
 --
 -- Déclencheurs `activite_pedagogique`
@@ -229,7 +232,9 @@ INSERT INTO `cours` (`id_cours`, `code_cours`, `intitule_cours`, `id_enseignant`
 (7, 'INF-L2-BD-001', 'Modelisation de bases de données', 5, 40.00, 160, 4, 1, 'LICENCE'),
 (8, 'INF-L3-DAS-002', 'Développement Web', 5, 40.00, 160, 4, 1, 'LICENCE'),
 (9, 'INF-M1-BDA-001', 'Introduction au Big Data', 4, 20.00, 80, 2, 1, 'LICENCE'),
-(10, 'INF-M2-CIO-002', 'Sécurité des systèmes distribués', 6, 40.00, 160, 4, 1, 'LICENCE');
+(10, 'INF-M2-CIO-002', 'Sécurité des systèmes distribués', 6, 40.00, 160, 4, 1, 'LICENCE'),
+(11, 'INF-L2-BD-002', 'Big Data 1', 7, 40.00, 160, 4, 1, 'LICENCE'),
+(12, 'INF-L1-BD-001', 'Introduction au  Data', 7, 40.00, 160, 4, 1, 'LICENCE');
 
 -- --------------------------------------------------------
 
@@ -252,7 +257,9 @@ INSERT INTO `cours_filiere` (`id_cours`, `id_filiere`, `niveau`, `semestre`) VAL
 (7, 1, 'L2', 'S3'),
 (8, 1, 'L3', 'S3'),
 (9, 1, 'M1', 'S1'),
-(10, 1, 'M2', 'S2');
+(10, 1, 'M2', 'S2'),
+(11, 1, 'M1', 'S2'),
+(12, 1, 'L1', 'S1');
 
 -- --------------------------------------------------------
 
@@ -299,10 +306,11 @@ CREATE TABLE `enseignant` (
 --
 
 INSERT INTO `enseignant` (`id_enseignant`, `nom`, `prenoms`, `email`, `telephone`, `statut`, `actif`, `id_departement`, `id_grade`, `id_taux`, `id_utilisateur`) VALUES
-(3, 'KOUASSI', 'Jean Michel', 'kouassi@uvci.ci', '0708080808', 'PERMANENT', 1, 1, 1, 6, 6),
+(3, 'KOUASSI', 'Jean Michel', 'kouassi@uvci.ci', '0708080808', 'PERMANENT', 1, 1, 1, 7, 6),
 (4, 'YAO', 'Stéphane', 'yao@uvci.ci', '0708080807', 'PERMANENT', 1, 1, 2, 8, 7),
 (5, 'KOFFI', 'Armand', 'koffi@uvci.ci', '0708080806', 'VACATAIRE', 1, 1, 2, 12, 8),
-(6, 'ATTA', 'Clarisse', 'atta@uvci.ci', '0708080805', 'VACATAIRE', 1, 1, 2, 13, 9);
+(6, 'ATTA', 'Clarisse', 'atta@uvci.ci', '0708080805', 'VACATAIRE', 1, 1, 2, 13, 9),
+(7, 'YOUAN', 'bi', 'bi7.youan@uvci.edu.ci', '0708080804', 'PERMANENT', 1, 1, 2, 8, 10);
 
 --
 -- Déclencheurs `enseignant`
@@ -345,12 +353,13 @@ CREATE TABLE `enseignant_taux_horaire` (
 --
 
 INSERT INTO `enseignant_taux_horaire` (`id_enseignant_taux`, `id_enseignant`, `id_taux`, `actif`, `date_affectation`) VALUES
-(1, 3, 6, 1, '2026-05-16 22:46:15'),
-(2, 3, 7, 1, '2026-05-16 22:46:15'),
 (3, 4, 8, 1, '2026-05-16 22:49:35'),
 (4, 4, 9, 1, '2026-05-16 22:49:35'),
 (5, 5, 12, 1, '2026-05-16 22:51:48'),
-(6, 6, 13, 1, '2026-05-16 22:53:28');
+(6, 6, 13, 1, '2026-05-16 22:53:28'),
+(7, 3, 7, 1, '2026-05-19 13:49:59'),
+(8, 7, 8, 1, '2026-05-19 17:46:11'),
+(9, 7, 9, 1, '2026-05-19 17:46:11');
 
 -- --------------------------------------------------------
 
@@ -504,7 +513,10 @@ INSERT INTO `ressource_pedagogique` (`id_ressource`, `titre_ressource`, `type_re
 (5, 'documents pédagogiques', '', '', NULL, '2026-05-16 23:15:19', 1, 7),
 (6, 'Vidéo pédagogique', '', '', NULL, '2026-05-16 23:17:44', 1, 9),
 (7, 'quiz', '', '', NULL, '2026-05-16 23:20:49', 1, 8),
-(8, 'Contenus textuels', '', '', NULL, '2026-05-16 23:22:49', 1, 10);
+(8, 'Contenus textuels', '', '', NULL, '2026-05-16 23:22:49', 1, 10),
+(9, 'documents pédagogiques', '', 'RAS', NULL, '2026-05-19 17:53:01', 1, 11),
+(10, 'Vidéo pédagogique', '', 'Bon', NULL, '2026-05-19 17:54:00', 1, 12),
+(11, 'quiz', '', 'RAS', NULL, '2026-05-20 13:10:03', 1, 11);
 
 -- --------------------------------------------------------
 
@@ -583,7 +595,8 @@ INSERT INTO `utilisateur` (`id_utilisateur`, `login`, `mot_de_passe_hash`, `acti
 (6, 'kouassi_bd', '$2y$10$yzfbMfvJfZUWICOV0rP8z.fQvLIGxpTU9JkdM69oAKz2vS0QU/wY2', 1, '2026-05-16 22:38:37', 3),
 (7, 'yao_bda', '$2y$10$PdM7F8/pRg1e9OpL3y6r3eFtKjfqELD4IvP7WZJRvgqaXQDLZoqfO', 1, '2026-05-16 22:39:17', 3),
 (8, 'koffi_das', '$2y$10$mm9/.2V/vDbF/2IdICeQEeVGwOOKNo33fYvRReln9Qv9w1f6TrgHq', 1, '2026-05-16 22:39:54', 3),
-(9, 'atta_cio', '$2y$10$1oFqZKMN0LeZaTwxKX4axOBamR6VI0SGyA3A/.3uim2ood8ReoplO', 1, '2026-05-16 22:40:28', 3);
+(9, 'atta_cio', '$2y$10$1oFqZKMN0LeZaTwxKX4axOBamR6VI0SGyA3A/.3uim2ood8ReoplO', 1, '2026-05-16 22:40:28', 3),
+(10, 'youanbi', '$2y$10$z3nAgFxm6oGgLIc2H0iDjeLO4GJpAjdT/f1D8QX/kJ7JgPpG3NeaC', 1, '2026-05-19 17:05:39', 3);
 
 -- --------------------------------------------------------
 
@@ -609,7 +622,10 @@ INSERT INTO `validation_activite` (`id_validation`, `date_validation`, `decision
 (3, '2026-05-16 23:24:03', 'REJETEE', 'Activité rejetée.', 6, 2),
 (4, '2026-05-16 23:24:07', 'VALIDEE', 'Activité validée.', 4, 2),
 (5, '2026-05-16 23:24:11', 'VALIDEE', 'Activité validée.', 2, 2),
-(6, '2026-05-16 23:24:14', 'VALIDEE', 'Activité validée.', 3, 2);
+(6, '2026-05-16 23:24:14', 'VALIDEE', 'Activité validée.', 3, 2),
+(7, '2026-05-19 17:54:45', 'VALIDEE', 'Activité validée.', 8, 2),
+(8, '2026-05-19 17:54:49', 'VALIDEE', 'Activité validée.', 7, 2),
+(9, '2026-05-20 13:11:51', 'VALIDEE', 'Activité validée.', 9, 2);
 
 --
 -- Déclencheurs `validation_activite`
@@ -903,13 +919,13 @@ ALTER TABLE `departement`
 -- AUTO_INCREMENT pour la table `enseignant`
 --
 ALTER TABLE `enseignant`
-  MODIFY `id_enseignant` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id_enseignant` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT pour la table `enseignant_taux_horaire`
 --
 ALTER TABLE `enseignant_taux_horaire`
-  MODIFY `id_enseignant_taux` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id_enseignant_taux` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT pour la table `etat_paiement`
@@ -951,7 +967,7 @@ ALTER TABLE `parametre_calcul`
 -- AUTO_INCREMENT pour la table `ressource_pedagogique`
 --
 ALTER TABLE `ressource_pedagogique`
-  MODIFY `id_ressource` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id_ressource` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT pour la table `role`
@@ -969,13 +985,13 @@ ALTER TABLE `taux_horaire`
 -- AUTO_INCREMENT pour la table `utilisateur`
 --
 ALTER TABLE `utilisateur`
-  MODIFY `id_utilisateur` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id_utilisateur` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT pour la table `validation_activite`
 --
 ALTER TABLE `validation_activite`
-  MODIFY `id_validation` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id_validation` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- Contraintes pour les tables déchargées
