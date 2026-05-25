@@ -36,51 +36,99 @@ if($idAnnee === ""){
 }
 
 $params = [];
-$where = "ap.statut_validation = 'VALIDEE'";
+
+$sql = "
+SELECT
+    base.id_enseignant,
+    base.nom,
+    base.prenoms,
+    base.statut,
+    base.id_grade,
+    base.libelle_grade,
+    base.charge_statutaire,
+    base.niveau,
+    SUM(base.volume_total) AS volume_total
+FROM (
+    SELECT
+        e.id_enseignant,
+        e.nom,
+        e.prenoms,
+        e.statut,
+        e.id_grade,
+        g.libelle_grade,
+        g.charge_statutaire,
+        cf.niveau,
+        ec.volume_horaire AS volume_total
+    FROM enseignant_cours ec
+    JOIN enseignant e ON e.id_enseignant = ec.id_enseignant
+    LEFT JOIN grade g ON g.id_grade = e.id_grade
+    JOIN cours c ON c.id_cours = ec.id_cours
+    LEFT JOIN cours_filiere cf ON cf.id_cours = c.id_cours
+    WHERE ec.actif = 1
+";
 
 if($idAnnee !== ""){
-    $where .= " AND ap.id_annee = :id_annee";
-    $params["id_annee"] = $idAnnee;
+    $sql .= " AND ec.id_annee = :id_annee_cours";
+    $params["id_annee_cours"] = $idAnnee;
+}
+
+if($idEnseignant !== ""){
+    $sql .= " AND e.id_enseignant = :id_enseignant_cours";
+    $params["id_enseignant_cours"] = $idEnseignant;
+}
+
+$sql .= "
+    UNION ALL
+
+    SELECT
+        e.id_enseignant,
+        e.nom,
+        e.prenoms,
+        e.statut,
+        e.id_grade,
+        g.libelle_grade,
+        g.charge_statutaire,
+        cf.niveau,
+        ap.volume_horaire_calcule AS volume_total
+    FROM activite_pedagogique ap
+    JOIN enseignant e ON e.id_enseignant = ap.id_enseignant
+    LEFT JOIN grade g ON g.id_grade = e.id_grade
+    JOIN cours c ON c.id_cours = ap.id_cours
+    LEFT JOIN cours_filiere cf ON cf.id_cours = c.id_cours
+    WHERE ap.statut_validation = 'VALIDEE'
+";
+
+if($idAnnee !== ""){
+    $sql .= " AND ap.id_annee = :id_annee_activite";
+    $params["id_annee_activite"] = $idAnnee;
 }
 
 if($dateDebut !== "" && $dateFin !== ""){
-    $where .= " AND DATE(ap.date_saisie) BETWEEN :date_debut AND :date_fin";
+    $sql .= " AND DATE(ap.date_saisie) BETWEEN :date_debut AND :date_fin";
     $params["date_debut"] = $dateDebut;
     $params["date_fin"] = $dateFin;
 }
 
 if($idEnseignant !== ""){
-    $where .= " AND e.id_enseignant = :id_enseignant";
-    $params["id_enseignant"] = $idEnseignant;
+    $sql .= " AND e.id_enseignant = :id_enseignant_activite";
+    $params["id_enseignant_activite"] = $idEnseignant;
 }
 
-$sql = "
-SELECT
-    e.id_enseignant,
-    e.nom,
-    e.prenoms,
-    e.statut,
-    e.id_grade,
-    g.libelle_grade,
-    g.charge_statutaire,
-    cf.niveau,
-    SUM(ap.volume_horaire_calcule) AS volume_total
-FROM activite_pedagogique ap
-JOIN enseignant e ON e.id_enseignant = ap.id_enseignant
-LEFT JOIN grade g ON g.id_grade = e.id_grade
-JOIN cours c ON c.id_cours = ap.id_cours
-LEFT JOIN cours_filiere cf ON cf.id_cours = c.id_cours
-WHERE $where
+$sql .= "
+) AS base
 GROUP BY
-    e.id_enseignant,
-    e.nom,
-    e.prenoms,
-    e.statut,
-    e.id_grade,
-    g.libelle_grade,
-    g.charge_statutaire,
-    cf.niveau
-ORDER BY e.nom, e.prenoms, cf.niveau
+    base.id_enseignant,
+    base.nom,
+    base.prenoms,
+    base.statut,
+    base.id_grade,
+    base.libelle_grade,
+    base.charge_statutaire,
+    base.niveau
+ORDER BY
+    base.nom,
+    base.prenoms,
+    base.niveau
 ";
 
 $stmt = $pdo->prepare($sql);
@@ -98,12 +146,6 @@ $stmtTaux = $pdo->prepare("
     LIMIT 1
 ");
 
-/*
-|--------------------------------------------------------------------------
-| CALCUL GLOBAL PAR ENSEIGNANT
-|--------------------------------------------------------------------------
-*/
-
 $totauxParEnseignant = [];
 
 foreach($lignes as $ligne){
@@ -119,12 +161,6 @@ foreach($lignes as $ligne){
 
     $totauxParEnseignant[$id]["volume_total"] += (float)$ligne["volume_total"];
 }
-
-/*
-|--------------------------------------------------------------------------
-| CALCUL PAR LIGNE AVEC RÉPARTITION PROPORTIONNELLE
-|--------------------------------------------------------------------------
-*/
 
 $totalGeneral = 0;
 $totalVolume = 0;

@@ -137,6 +137,76 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
                     "id_cours" => $idCours
                 ]);
 
+                /*
+                |--------------------------------------------------------------------------
+                | Synchronisation RH : enseignant_cours
+                |--------------------------------------------------------------------------
+                | Le moteur de paiement utilise enseignant_cours.volume_horaire.
+                | Donc toute modification du cours doit synchroniser cette table.
+                */
+
+                $stmtCheckEC = $pdo->prepare("
+                    SELECT COUNT(*)
+                    FROM enseignant_cours
+                    WHERE id_cours = ?
+                ");
+                $stmtCheckEC->execute([$idCours]);
+
+                if($stmtCheckEC->fetchColumn() > 0){
+
+                    $stmtUpdateEC = $pdo->prepare("
+                        UPDATE enseignant_cours
+                        SET
+                            id_enseignant = :id_enseignant,
+                            volume_horaire = :volume_horaire
+                        WHERE id_cours = :id_cours
+                    ");
+
+                    $stmtUpdateEC->execute([
+                        "id_enseignant" => $idEnseignant,
+                        "volume_horaire" => $nombreHeures,
+                        "id_cours" => $idCours
+                    ]);
+
+                }else{
+
+                    $stmtAnnee = $pdo->query("
+                        SELECT id_annee
+                        FROM annee_academique
+                        WHERE est_active = 1
+                        LIMIT 1
+                    ");
+
+                    $annee = $stmtAnnee->fetch(PDO::FETCH_ASSOC);
+
+                    if($annee && $idEnseignant !== null){
+
+                        $stmtInsertEC = $pdo->prepare("
+                            INSERT INTO enseignant_cours(
+                                id_enseignant,
+                                id_cours,
+                                id_annee,
+                                volume_horaire,
+                                actif
+                            )
+                            VALUES(
+                                :id_enseignant,
+                                :id_cours,
+                                :id_annee,
+                                :volume_horaire,
+                                1
+                            )
+                        ");
+
+                        $stmtInsertEC->execute([
+                            "id_enseignant" => $idEnseignant,
+                            "id_cours" => $idCours,
+                            "id_annee" => $annee["id_annee"],
+                            "volume_horaire" => $nombreHeures
+                        ]);
+                    }
+                }
+
                 $verifAssociation = $pdo->prepare("
                     SELECT COUNT(*)
                     FROM cours_filiere
