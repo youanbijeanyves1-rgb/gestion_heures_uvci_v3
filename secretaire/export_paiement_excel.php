@@ -1,5 +1,5 @@
 <?php
-
+date_default_timezone_set('Africa/Abidjan');
 require_once "../auth/verifier_session.php";
 require_once "../config/database.php";
 require_once "../includes/fonctions_metier.php";
