@@ -51,10 +51,10 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
                     <div class="module-card">
                         <div class="module-icon blue">📋</div>
 
-                        <h3>Gestion des activités pédagogiques</h3>
+                        <h3>Suivi des activités pédagogiques</h3>
 
                         <p>
-                            Consulter, suivre et contrôler les activités pédagogiques enregistrées.
+                            Suivre les activités pédagogiques enregistrées.
                         </p>
                         <a href="liste_activites.php" class="module-link">
                         <span class="module-btn">Accéder </span>

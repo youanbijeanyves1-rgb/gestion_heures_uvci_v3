@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Hôte : 127.0.0.1
--- Généré le : mer. 20 mai 2026 à 18:03
+-- Généré le : mer. 27 mai 2026 à 16:21
 -- Version du serveur : 10.4.32-MariaDB
 -- Version de PHP : 8.2.12
 
@@ -125,14 +125,12 @@ CREATE TABLE `activite_pedagogique` (
 --
 
 INSERT INTO `activite_pedagogique` (`id_activite`, `type_activite`, `niveau_complexite`, `nombre_heures`, `nb_sequences`, `volume_horaire_calcule`, `statut_validation`, `date_saisie`, `observation`, `id_enseignant`, `id_cours`, `id_ressource`, `id_annee`, `id_parametre`, `id_saisi_par`) VALUES
-(2, 'CREATION_RESSOURCE', 'NIVEAU_1', 10.00, 40, 16.00, 'VALIDEE', '2026-05-16 23:13:57', '', 3, 7, 4, 1, 1, 2),
-(3, 'MISE_A_JOUR_RESSOURCE', 'NIVEAU_1', 9.00, 36, 7.20, 'VALIDEE', '2026-05-16 23:15:19', '', 5, 7, 5, 1, 4, 2),
-(4, 'CREATION_RESSOURCE', 'NIVEAU_2', 5.00, 20, 15.00, 'VALIDEE', '2026-05-16 23:17:44', '', 4, 9, 6, 1, 2, 2),
-(5, 'MISE_A_JOUR_RESSOURCE', 'NIVEAU_1', 29.00, 116, 23.20, 'REJETEE', '2026-05-16 23:20:49', '', 5, 8, 7, 1, 4, 2),
-(6, 'CREATION_RESSOURCE', 'NIVEAU_1', 39.50, 158, 63.20, 'REJETEE', '2026-05-16 23:22:49', '', 6, 10, 8, 1, 1, 2),
-(7, 'CREATION_RESSOURCE', 'NIVEAU_1', 40.00, 160, 64.00, 'VALIDEE', '2026-05-19 17:53:01', 'RAS', 7, 11, 9, 1, 1, 2),
-(8, 'MISE_A_JOUR_RESSOURCE', 'NIVEAU_3', 39.00, 156, 117.00, 'VALIDEE', '2026-05-19 17:54:00', 'Bon', 7, 12, 10, 1, 6, 2),
-(9, 'CREATION_RESSOURCE', 'NIVEAU_1', 5.00, 20, 8.00, 'VALIDEE', '2026-05-20 13:10:03', 'RAS', 7, 11, 11, 1, 1, 2);
+(10, 'CREATION_RESSOURCE', 'NIVEAU_3', 10.00, 40, 60.00, 'VALIDEE', '2026-05-25 10:49:07', 'Rien à signaler !', 10, 16, 12, 1, 3, 2),
+(11, 'MISE_A_JOUR_RESSOURCE', 'NIVEAU_1', 5.00, 20, 4.00, 'REJETEE', '2026-05-25 10:54:34', 'Problème de questionnement.', 8, 15, 13, 1, 4, 2),
+(12, 'MISE_A_JOUR_RESSOURCE', 'NIVEAU_2', 40.00, 160, 60.00, 'REJETEE', '2026-05-25 19:10:56', '', 10, 16, 14, 1, 5, 2),
+(13, 'CREATION_RESSOURCE', 'NIVEAU_2', 20.00, 80, 60.00, 'VALIDEE', '2026-05-25 19:16:04', '', 9, 13, 15, 1, 2, 2),
+(14, 'CREATION_RESSOURCE', 'NIVEAU_3', 40.00, 160, 240.00, 'VALIDEE', '2026-05-25 19:18:58', '', 8, 14, 16, 1, 3, 2),
+(15, 'MISE_A_JOUR_RESSOURCE', 'NIVEAU_3', 39.50, 158, 118.50, 'VALIDEE', '2026-05-25 19:28:19', '', 10, 15, 17, 1, 6, 2);
 
 --
 -- Déclencheurs `activite_pedagogique`
@@ -204,7 +202,8 @@ CREATE TABLE `annee_academique` (
 
 INSERT INTO `annee_academique` (`id_annee`, `libelle_annee`, `date_debut`, `date_fin`, `est_active`) VALUES
 (1, '2025-2026', '2025-10-01', '2026-09-30', 1),
-(3, '2024-2025', '2024-09-16', '2025-07-16', 0);
+(3, '2024-2025', '2024-09-16', '2025-07-16', 0),
+(4, '2023-2024', '2023-09-16', '2024-07-16', 0);
 
 -- --------------------------------------------------------
 
@@ -229,12 +228,11 @@ CREATE TABLE `cours` (
 --
 
 INSERT INTO `cours` (`id_cours`, `code_cours`, `intitule_cours`, `id_enseignant`, `nombre_heures`, `nb_sequences`, `nombre_credits`, `actif`, `niveau`) VALUES
-(7, 'INF-L2-BD-001', 'Modelisation de bases de données', 5, 40.00, 160, 4, 1, 'LICENCE'),
-(8, 'INF-L3-DAS-002', 'Développement Web', 5, 40.00, 160, 4, 1, 'LICENCE'),
-(9, 'INF-M1-BDA-001', 'Introduction au Big Data', 4, 20.00, 80, 2, 1, 'LICENCE'),
-(10, 'INF-M2-CIO-002', 'Sécurité des systèmes distribués', 6, 40.00, 160, 4, 1, 'LICENCE'),
-(11, 'INF-L2-BD-002', 'Big Data 1', 7, 40.00, 160, 4, 1, 'LICENCE'),
-(12, 'INF-L1-BD-001', 'Introduction au  Data', 7, 40.00, 160, 4, 1, 'LICENCE');
+(13, 'BD-L2-001', 'Modelisation de bases de données', 9, 30.00, 120, 3, 1, 'LICENCE'),
+(14, 'DAS-L3-001', 'Développement Web', 8, 30.00, 120, 3, 1, 'LICENCE'),
+(15, 'BDA-M1-001', 'Introduction au Big Data', 10, 30.00, 120, 3, 1, ''),
+(16, 'BD-L3-001', 'Administration des bases de données', 10, 20.00, 80, 2, 1, 'LICENCE'),
+(17, 'BDA-M1-003', 'Introduction au Big Data', 9, 40.00, 160, 4, 1, 'LICENCE');
 
 -- --------------------------------------------------------
 
@@ -254,12 +252,11 @@ CREATE TABLE `cours_filiere` (
 --
 
 INSERT INTO `cours_filiere` (`id_cours`, `id_filiere`, `niveau`, `semestre`) VALUES
-(7, 1, 'L2', 'S3'),
-(8, 1, 'L3', 'S3'),
-(9, 1, 'M1', 'S1'),
-(10, 1, 'M2', 'S2'),
-(11, 1, 'M1', 'S2'),
-(12, 1, 'L1', 'S1');
+(13, 1, 'L2', 'S3'),
+(14, 1, 'L3', 'S5'),
+(15, 1, 'M1', 'S1'),
+(16, 1, 'L3', 'S5'),
+(17, 1, 'M1', 'S1');
 
 -- --------------------------------------------------------
 
@@ -306,11 +303,9 @@ CREATE TABLE `enseignant` (
 --
 
 INSERT INTO `enseignant` (`id_enseignant`, `nom`, `prenoms`, `email`, `telephone`, `statut`, `actif`, `id_departement`, `id_grade`, `id_taux`, `id_utilisateur`) VALUES
-(3, 'KOUASSI', 'Jean Michel', 'kouassi@uvci.ci', '0708080808', 'PERMANENT', 1, 1, 1, 7, 6),
-(4, 'YAO', 'Stéphane', 'yao@uvci.ci', '0708080807', 'PERMANENT', 1, 1, 2, 8, 7),
-(5, 'KOFFI', 'Armand', 'koffi@uvci.ci', '0708080806', 'VACATAIRE', 1, 1, 2, 12, 8),
-(6, 'ATTA', 'Clarisse', 'atta@uvci.ci', '0708080805', 'VACATAIRE', 1, 1, 2, 13, 9),
-(7, 'YOUAN', 'bi', 'bi7.youan@uvci.edu.ci', '0708080804', 'PERMANENT', 1, 1, 2, 8, 10);
+(8, 'KOFFI', 'Armand', 'koffi@uvci.ci', '0700000001', 'VACATAIRE', 1, 1, 2, 12, 11),
+(9, 'TRA', 'Lou Zoé', 'zoe@uvci.ci', '0700000002', 'PERMANENT', 1, 1, 1, 7, 12),
+(10, 'TRAORE', 'Adama', 'traore@uvci.ci', '0700000003', 'PERMANENT', 1, 1, 4, 10, 13);
 
 --
 -- Déclencheurs `enseignant`
@@ -337,6 +332,32 @@ DELIMITER ;
 -- --------------------------------------------------------
 
 --
+-- Structure de la table `enseignant_cours`
+--
+
+CREATE TABLE `enseignant_cours` (
+  `id_enseignant_cours` int(11) NOT NULL,
+  `id_enseignant` int(11) NOT NULL,
+  `id_cours` int(11) NOT NULL,
+  `id_annee` int(11) NOT NULL,
+  `volume_horaire` decimal(10,2) NOT NULL,
+  `actif` tinyint(1) DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `enseignant_cours`
+--
+
+INSERT INTO `enseignant_cours` (`id_enseignant_cours`, `id_enseignant`, `id_cours`, `id_annee`, `volume_horaire`, `actif`) VALUES
+(1, 9, 13, 1, 30.00, 1),
+(2, 8, 14, 1, 30.00, 1),
+(3, 10, 15, 1, 30.00, 1),
+(4, 10, 16, 1, 20.00, 1),
+(8, 9, 17, 1, 40.00, 1);
+
+-- --------------------------------------------------------
+
+--
 -- Structure de la table `enseignant_taux_horaire`
 --
 
@@ -353,13 +374,10 @@ CREATE TABLE `enseignant_taux_horaire` (
 --
 
 INSERT INTO `enseignant_taux_horaire` (`id_enseignant_taux`, `id_enseignant`, `id_taux`, `actif`, `date_affectation`) VALUES
-(3, 4, 8, 1, '2026-05-16 22:49:35'),
-(4, 4, 9, 1, '2026-05-16 22:49:35'),
-(5, 5, 12, 1, '2026-05-16 22:51:48'),
-(6, 6, 13, 1, '2026-05-16 22:53:28'),
-(7, 3, 7, 1, '2026-05-19 13:49:59'),
-(8, 7, 8, 1, '2026-05-19 17:46:11'),
-(9, 7, 9, 1, '2026-05-19 17:46:11');
+(10, 8, 12, 1, '2026-05-21 15:50:16'),
+(11, 9, 7, 1, '2026-05-21 15:53:04'),
+(12, 10, 10, 1, '2026-05-21 15:55:50'),
+(13, 10, 11, 1, '2026-05-21 15:55:50');
 
 -- --------------------------------------------------------
 
@@ -509,14 +527,12 @@ CREATE TABLE `ressource_pedagogique` (
 --
 
 INSERT INTO `ressource_pedagogique` (`id_ressource`, `titre_ressource`, `type_ressource`, `description`, `chemin_fichier`, `date_creation`, `actif`, `id_cours`) VALUES
-(4, 'documents pédagogiques', '', '', NULL, '2026-05-16 23:13:57', 1, 7),
-(5, 'documents pédagogiques', '', '', NULL, '2026-05-16 23:15:19', 1, 7),
-(6, 'Vidéo pédagogique', '', '', NULL, '2026-05-16 23:17:44', 1, 9),
-(7, 'quiz', '', '', NULL, '2026-05-16 23:20:49', 1, 8),
-(8, 'Contenus textuels', '', '', NULL, '2026-05-16 23:22:49', 1, 10),
-(9, 'documents pédagogiques', '', 'RAS', NULL, '2026-05-19 17:53:01', 1, 11),
-(10, 'Vidéo pédagogique', '', 'Bon', NULL, '2026-05-19 17:54:00', 1, 12),
-(11, 'quiz', '', 'RAS', NULL, '2026-05-20 13:10:03', 1, 11);
+(12, 'Vidéo pédagogique', '', 'Rien à signaler !', NULL, '2026-05-25 10:49:07', 1, 16),
+(13, 'quiz', '', 'Problème de questionnement.', NULL, '2026-05-25 10:54:34', 1, 15),
+(14, 'documents pédagogiques', '', '', NULL, '2026-05-25 19:10:56', 1, 16),
+(15, 'quiz', '', '', NULL, '2026-05-25 19:16:04', 1, 13),
+(16, 'documents pédagogiques', '', '', NULL, '2026-05-25 19:18:58', 1, 14),
+(17, 'Vidéo pédagogique', '', '', NULL, '2026-05-25 19:28:19', 1, 15);
 
 -- --------------------------------------------------------
 
@@ -590,13 +606,11 @@ CREATE TABLE `utilisateur` (
 --
 
 INSERT INTO `utilisateur` (`id_utilisateur`, `login`, `mot_de_passe_hash`, `actif`, `date_creation`, `id_role`) VALUES
-(1, 'admin', '$2y$10$DmQYfg2zXx0mXKijM6P0guE2gNZSTyvfEvwBQseJljJcN5k2xcW7i', 1, '2026-05-07 19:19:41', 1),
-(2, 'sec_principal', '$2y$10$DmQYfg2zXx0mXKijM6P0guE2gNZSTyvfEvwBQseJljJcN5k2xcW7i', 1, '2026-05-07 19:19:41', 2),
-(6, 'kouassi_bd', '$2y$10$yzfbMfvJfZUWICOV0rP8z.fQvLIGxpTU9JkdM69oAKz2vS0QU/wY2', 1, '2026-05-16 22:38:37', 3),
-(7, 'yao_bda', '$2y$10$PdM7F8/pRg1e9OpL3y6r3eFtKjfqELD4IvP7WZJRvgqaXQDLZoqfO', 1, '2026-05-16 22:39:17', 3),
-(8, 'koffi_das', '$2y$10$mm9/.2V/vDbF/2IdICeQEeVGwOOKNo33fYvRReln9Qv9w1f6TrgHq', 1, '2026-05-16 22:39:54', 3),
-(9, 'atta_cio', '$2y$10$1oFqZKMN0LeZaTwxKX4axOBamR6VI0SGyA3A/.3uim2ood8ReoplO', 1, '2026-05-16 22:40:28', 3),
-(10, 'youanbi', '$2y$10$z3nAgFxm6oGgLIc2H0iDjeLO4GJpAjdT/f1D8QX/kJ7JgPpG3NeaC', 1, '2026-05-19 17:05:39', 3);
+(1, 'admin_demo', '$2y$10$k6Tw7qHXLwDRwIRd3RQ2OOf/mfpmjHAyU5OeKRqZujwwKfrTYTxMG', 1, '2026-05-07 19:19:41', 1),
+(2, 'secretaire_demo', '$2y$10$LTpFMoT7CleyCNfzEtDgle05GTPFURYbEVfHT8yVRkreJ04.Qw.du', 1, '2026-05-07 19:19:41', 2),
+(11, 'enseignant1_demo', '$2y$10$KTC3HEyQS7P8r7T2.2c/5erkssgOfSnkO15jhDaxTw9OFjI18V8im', 1, '2026-05-21 15:29:57', 3),
+(12, 'enseignant2_demo', '$2y$10$zcXKVfsUSCDKGwJseNk7jOTnuB8KMup.B1cqV1tvHep5P2FtCDOtG', 1, '2026-05-21 15:31:14', 3),
+(13, 'enseignant3_demo', '$2y$10$MTqy9tkfnlFt2HE7grAOvODqAasROXaXbDnHX8OtsNKSyfWPJm8nC', 1, '2026-05-21 15:32:20', 3);
 
 -- --------------------------------------------------------
 
@@ -618,14 +632,12 @@ CREATE TABLE `validation_activite` (
 --
 
 INSERT INTO `validation_activite` (`id_validation`, `date_validation`, `decision`, `commentaire`, `id_activite`, `id_validateur`) VALUES
-(2, '2026-05-16 23:23:52', 'REJETEE', 'Activité rejetée.', 5, 2),
-(3, '2026-05-16 23:24:03', 'REJETEE', 'Activité rejetée.', 6, 2),
-(4, '2026-05-16 23:24:07', 'VALIDEE', 'Activité validée.', 4, 2),
-(5, '2026-05-16 23:24:11', 'VALIDEE', 'Activité validée.', 2, 2),
-(6, '2026-05-16 23:24:14', 'VALIDEE', 'Activité validée.', 3, 2),
-(7, '2026-05-19 17:54:45', 'VALIDEE', 'Activité validée.', 8, 2),
-(8, '2026-05-19 17:54:49', 'VALIDEE', 'Activité validée.', 7, 2),
-(9, '2026-05-20 13:11:51', 'VALIDEE', 'Activité validée.', 9, 2);
+(10, '2026-05-25 10:55:38', 'REJETEE', 'Activité rejetée.', 11, 2),
+(11, '2026-05-25 10:55:49', 'VALIDEE', 'Activité validée.', 10, 2),
+(12, '2026-05-25 19:19:47', 'VALIDEE', 'Activité validée.', 14, 2),
+(13, '2026-05-25 19:21:29', 'REJETEE', 'Activité rejetée.', 12, 2),
+(14, '2026-05-25 19:21:33', 'VALIDEE', 'Activité validée.', 13, 2),
+(15, '2026-05-25 19:29:33', 'VALIDEE', 'Activité validée.', 15, 2);
 
 --
 -- Déclencheurs `validation_activite`
@@ -792,6 +804,15 @@ ALTER TABLE `enseignant`
   ADD KEY `fk_enseignant_taux` (`id_taux`);
 
 --
+-- Index pour la table `enseignant_cours`
+--
+ALTER TABLE `enseignant_cours`
+  ADD PRIMARY KEY (`id_enseignant_cours`),
+  ADD UNIQUE KEY `uk_enseignant_cours_annee` (`id_enseignant`,`id_cours`,`id_annee`),
+  ADD KEY `fk_ec_cours` (`id_cours`),
+  ADD KEY `fk_ec_annee` (`id_annee`);
+
+--
 -- Index pour la table `enseignant_taux_horaire`
 --
 ALTER TABLE `enseignant_taux_horaire`
@@ -919,13 +940,19 @@ ALTER TABLE `departement`
 -- AUTO_INCREMENT pour la table `enseignant`
 --
 ALTER TABLE `enseignant`
-  MODIFY `id_enseignant` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id_enseignant` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+
+--
+-- AUTO_INCREMENT pour la table `enseignant_cours`
+--
+ALTER TABLE `enseignant_cours`
+  MODIFY `id_enseignant_cours` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT pour la table `enseignant_taux_horaire`
 --
 ALTER TABLE `enseignant_taux_horaire`
-  MODIFY `id_enseignant_taux` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id_enseignant_taux` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT pour la table `etat_paiement`
@@ -967,7 +994,7 @@ ALTER TABLE `parametre_calcul`
 -- AUTO_INCREMENT pour la table `ressource_pedagogique`
 --
 ALTER TABLE `ressource_pedagogique`
-  MODIFY `id_ressource` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id_ressource` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT pour la table `role`
@@ -985,13 +1012,13 @@ ALTER TABLE `taux_horaire`
 -- AUTO_INCREMENT pour la table `utilisateur`
 --
 ALTER TABLE `utilisateur`
-  MODIFY `id_utilisateur` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id_utilisateur` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT pour la table `validation_activite`
 --
 ALTER TABLE `validation_activite`
-  MODIFY `id_validation` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id_validation` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- Contraintes pour les tables déchargées
@@ -1029,6 +1056,14 @@ ALTER TABLE `enseignant`
   ADD CONSTRAINT `fk_enseignant_grade` FOREIGN KEY (`id_grade`) REFERENCES `grade` (`id_grade`) ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_enseignant_taux` FOREIGN KEY (`id_taux`) REFERENCES `taux_horaire` (`id_taux`) ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_enseignant_utilisateur` FOREIGN KEY (`id_utilisateur`) REFERENCES `utilisateur` (`id_utilisateur`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Contraintes pour la table `enseignant_cours`
+--
+ALTER TABLE `enseignant_cours`
+  ADD CONSTRAINT `fk_ec_annee` FOREIGN KEY (`id_annee`) REFERENCES `annee_academique` (`id_annee`),
+  ADD CONSTRAINT `fk_ec_cours` FOREIGN KEY (`id_cours`) REFERENCES `cours` (`id_cours`),
+  ADD CONSTRAINT `fk_ec_enseignant` FOREIGN KEY (`id_enseignant`) REFERENCES `enseignant` (`id_enseignant`);
 
 --
 -- Contraintes pour la table `enseignant_taux_horaire`
