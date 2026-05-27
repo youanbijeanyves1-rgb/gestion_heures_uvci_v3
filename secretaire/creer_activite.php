@@ -11,19 +11,35 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
 $message = "";
 $typeMessage = "";
 
-$enseignants = $pdo->query("
-    SELECT id_enseignant, nom, prenoms
-    FROM enseignant
-    WHERE actif = 1
-    ORDER BY nom, prenoms
-")->fetchAll(PDO::FETCH_ASSOC);
+/*
+|--------------------------------------------------------------------------
+| COURS ACTIFS AVEC ENSEIGNANT RESPONSABLE
+|--------------------------------------------------------------------------
+| Nouvelle règle métier :
+| Une activité pédagogique est liée à un cours.
+| L'enseignant de l'activité est automatiquement l'enseignant affecté au cours.
+*/
 
 $cours = $pdo->query("
-    SELECT id_cours, code_cours, intitule_cours, nombre_heures
-    FROM cours
-    WHERE actif = 1
-    ORDER BY intitule_cours
+    SELECT 
+        c.id_cours,
+        c.code_cours,
+        c.intitule_cours,
+        c.id_enseignant,
+        e.nom,
+        e.prenoms
+    FROM cours c
+    LEFT JOIN enseignant e 
+        ON e.id_enseignant = c.id_enseignant
+    WHERE c.actif = 1
+    ORDER BY c.intitule_cours
 ")->fetchAll(PDO::FETCH_ASSOC);
+
+/*
+|--------------------------------------------------------------------------
+| ANNÉE ACADÉMIQUE ACTIVE
+|--------------------------------------------------------------------------
+*/
 
 $anneeActive = $pdo->query("
     SELECT id_annee, libelle_annee
@@ -32,9 +48,14 @@ $anneeActive = $pdo->query("
     LIMIT 1
 ")->fetch(PDO::FETCH_ASSOC);
 
+/*
+|--------------------------------------------------------------------------
+| TRAITEMENT DU FORMULAIRE
+|--------------------------------------------------------------------------
+*/
+
 if($_SERVER["REQUEST_METHOD"] === "POST"){
 
-    $idEnseignant = $_POST["id_enseignant"] ?? "";
     $idCours = $_POST["id_cours"] ?? "";
     $titreRessource = trim($_POST["titre_ressource"] ?? "");
     $typeActivite = $_POST["type_activite"] ?? "";
@@ -43,132 +64,209 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
     $observation = trim($_POST["observation"] ?? "");
 
     if(!$anneeActive){
+
         $message = "Aucune année académique active n’est définie.";
         $typeMessage = "error";
+
     }
     elseif(
-        $idEnseignant === "" ||
         $idCours === "" ||
         $titreRessource === "" ||
         $typeActivite === "" ||
         $niveauComplexite === "" ||
         $nombreHeures === ""
     ){
+
         $message = "Veuillez remplir tous les champs obligatoires.";
         $typeMessage = "error";
+
     }
     elseif(!is_numeric($nombreHeures) || $nombreHeures <= 0){
+
         $message = "Le nombre d’heures doit être supérieur à 0.";
         $typeMessage = "error";
+
     }
     else{
 
-        $stmtParam = $pdo->prepare("
-            SELECT id_parametre
-            FROM parametre_calcul
-            WHERE type_activite = :type_activite
-              AND niveau_complexite = :niveau_complexite
-              AND actif = 1
+        /*
+        |--------------------------------------------------------------------------
+        | RÉCUPÉRATION DE L'ENSEIGNANT DU COURS
+        |--------------------------------------------------------------------------
+        | Sécurité métier :
+        | On ne fait pas confiance au formulaire pour l'enseignant.
+        | On le récupère directement depuis la table cours.
+        */
+
+        $stmtCours = $pdo->prepare("
+            SELECT 
+                c.id_cours,
+                c.id_enseignant,
+                c.intitule_cours,
+                e.nom,
+                e.prenoms
+            FROM cours c
+            LEFT JOIN enseignant e 
+                ON e.id_enseignant = c.id_enseignant
+            WHERE c.id_cours = ?
+              AND c.actif = 1
             LIMIT 1
         ");
 
-        $stmtParam->execute([
-            "type_activite" => $typeActivite,
-            "niveau_complexite" => $niveauComplexite
-        ]);
+        $stmtCours->execute([$idCours]);
+        $coursSelectionne = $stmtCours->fetch(PDO::FETCH_ASSOC);
 
-        $parametre = $stmtParam->fetch(PDO::FETCH_ASSOC);
+        if(!$coursSelectionne){
 
-        if(!$parametre){
-            $message = "Aucun paramètre de calcul actif ne correspond à cette activité.";
+            $message = "Le cours sélectionné est introuvable ou inactif.";
             $typeMessage = "error";
-        }else{
 
-            try{
+        }
+        elseif(empty($coursSelectionne["id_enseignant"])){
 
-                $pdo->beginTransaction();
+            $message = "Impossible d’enregistrer l’activité : aucun enseignant n’est affecté à ce cours.";
+            $typeMessage = "error";
 
-                $sqlRessource = "
-                    INSERT INTO ressource_pedagogique(
-                        titre_ressource,
-                        type_ressource,
-                        description,
-                        actif,
-                        id_cours
-                    )
-                    VALUES(
-                        :titre_ressource,
-                        :type_ressource,
-                        :description,
-                        1,
-                        :id_cours
-                    )
-                ";
+        }
+        else{
 
-                $stmtRessource = $pdo->prepare($sqlRessource);
+            $idEnseignant = $coursSelectionne["id_enseignant"];
 
-                $stmtRessource->execute([
-                    "titre_ressource" => $titreRessource,
-                    "type_ressource" => "DOCUMENT_PEDAGOGIQUE",
-                    "description" => $observation,
-                    "id_cours" => $idCours
-                ]);
+            /*
+            |--------------------------------------------------------------------------
+            | PARAMÈTRE DE CALCUL
+            |--------------------------------------------------------------------------
+            */
 
-                $idRessource = $pdo->lastInsertId();
+            $stmtParam = $pdo->prepare("
+                SELECT id_parametre
+                FROM parametre_calcul
+                WHERE type_activite = :type_activite
+                  AND niveau_complexite = :niveau_complexite
+                  AND actif = 1
+                LIMIT 1
+            ");
 
-                $sql = "
-                    INSERT INTO activite_pedagogique(
-                        type_activite,
-                        niveau_complexite,
-                        nombre_heures,
-                        id_enseignant,
-                        id_cours,
-                        id_ressource,
-                        id_annee,
-                        id_parametre,
-                        id_saisi_par,
-                        observation
-                    )
-                    VALUES(
-                        :type_activite,
-                        :niveau_complexite,
-                        :nombre_heures,
-                        :id_enseignant,
-                        :id_cours,
-                        :id_ressource,
-                        :id_annee,
-                        :id_parametre,
-                        :id_saisi_par,
-                        :observation
-                    )
-                ";
+            $stmtParam->execute([
+                "type_activite" => $typeActivite,
+                "niveau_complexite" => $niveauComplexite
+            ]);
 
-                $stmt = $pdo->prepare($sql);
+            $parametre = $stmtParam->fetch(PDO::FETCH_ASSOC);
 
-                $stmt->execute([
-                    "type_activite" => $typeActivite,
-                    "niveau_complexite" => $niveauComplexite,
-                    "nombre_heures" => $nombreHeures,
-                    "id_enseignant" => $idEnseignant,
-                    "id_cours" => $idCours,
-                    "id_ressource" => $idRessource,
-                    "id_annee" => $anneeActive["id_annee"],
-                    "id_parametre" => $parametre["id_parametre"],
-                    "id_saisi_par" => $_SESSION["id_utilisateur"],
-                    "observation" => $observation
-                ]);
+            if(!$parametre){
 
-                $pdo->commit();
-
-                $message = "Activité pédagogique enregistrée avec succès. Elle est en attente de validation.";
-                $typeMessage = "success";
-
-            }catch(Exception $e){
-
-                $pdo->rollBack();
-
-                $message = "Erreur lors de l’enregistrement de l’activité : " . $e->getMessage();
+                $message = "Aucun paramètre de calcul actif ne correspond à cette activité.";
                 $typeMessage = "error";
+
+            }else{
+
+                try{
+
+                    $pdo->beginTransaction();
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | CRÉATION DE LA RESSOURCE PÉDAGOGIQUE
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $sqlRessource = "
+                        INSERT INTO ressource_pedagogique(
+                            titre_ressource,
+                            type_ressource,
+                            description,
+                            actif,
+                            id_cours
+                        )
+                        VALUES(
+                            :titre_ressource,
+                            :type_ressource,
+                            :description,
+                            1,
+                            :id_cours
+                        )
+                    ";
+
+                    $stmtRessource = $pdo->prepare($sqlRessource);
+
+                    $stmtRessource->execute([
+                        "titre_ressource" => $titreRessource,
+                        "type_ressource" => "DOCUMENT_PEDAGOGIQUE",
+                        "description" => $observation,
+                        "id_cours" => $idCours
+                    ]);
+
+                    $idRessource = $pdo->lastInsertId();
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | CRÉATION DE L’ACTIVITÉ PÉDAGOGIQUE
+                    |--------------------------------------------------------------------------
+                    | Important :
+                    | nombre_heures ici est le nombre d'heures déclaré pour l'activité.
+                    | Ce n'est pas le nombre d'heures du cours.
+                    */
+
+                    $sql = "
+                        INSERT INTO activite_pedagogique(
+                            type_activite,
+                            niveau_complexite,
+                            nombre_heures,
+                            id_enseignant,
+                            id_cours,
+                            id_ressource,
+                            id_annee,
+                            id_parametre,
+                            id_saisi_par,
+                            observation
+                        )
+                        VALUES(
+                            :type_activite,
+                            :niveau_complexite,
+                            :nombre_heures,
+                            :id_enseignant,
+                            :id_cours,
+                            :id_ressource,
+                            :id_annee,
+                            :id_parametre,
+                            :id_saisi_par,
+                            :observation
+                        )
+                    ";
+
+                    $stmt = $pdo->prepare($sql);
+
+                    $stmt->execute([
+                        "type_activite" => $typeActivite,
+                        "niveau_complexite" => $niveauComplexite,
+                        "nombre_heures" => $nombreHeures,
+                        "id_enseignant" => $idEnseignant,
+                        "id_cours" => $idCours,
+                        "id_ressource" => $idRessource,
+                        "id_annee" => $anneeActive["id_annee"],
+                        "id_parametre" => $parametre["id_parametre"],
+                        "id_saisi_par" => $_SESSION["id_utilisateur"],
+                        "observation" => $observation
+                    ]);
+
+                    $pdo->commit();
+
+                    $message = "Activité pédagogique enregistrée avec succès pour l’enseignant affecté au cours : "
+                             . $coursSelectionne["nom"] . " " . $coursSelectionne["prenoms"]
+                             . ". Elle est en attente de validation.";
+
+                    $typeMessage = "success";
+
+                }catch(Exception $e){
+
+                    if($pdo->inTransaction()){
+                        $pdo->rollBack();
+                    }
+
+                    $message = "Erreur lors de l’enregistrement de l’activité : " . $e->getMessage();
+                    $typeMessage = "error";
+                }
             }
         }
     }
@@ -187,7 +285,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
         <header class="topbar">
             <div>
                 <h1>Enregistrer une activité pédagogique</h1>
-                <p>Création ou mise à jour d’une ressource pédagogique.</p>
+                <p>Création ou mise à jour d’une ressource pédagogique liée à un cours.</p>
             </div>
 
             <div class="user-box">
@@ -202,7 +300,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
             <div class="form-card">
 
                 <?php if($message !== ""): ?>
-                    <div class="alert <?= $typeMessage ?>">
+                    <div class="alert <?= htmlspecialchars($typeMessage) ?>">
                         <?= htmlspecialchars($message) ?>
                     </div>
                 <?php endif; ?>
@@ -217,29 +315,30 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
                 <form method="POST">
 
                     <div class="form-group">
-                        <label>Enseignant <span>*</span></label>
-                        <select name="id_enseignant" required>
-                            <option value="">-- Sélectionner un enseignant --</option>
-
-                            <?php foreach($enseignants as $enseignant): ?>
-                                <option value="<?= $enseignant["id_enseignant"] ?>">
-                                    <?= htmlspecialchars($enseignant["nom"] . " " . $enseignant["prenoms"]) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
                         <label>Cours <span>*</span></label>
+
                         <select name="id_cours" required>
                             <option value="">-- Sélectionner un cours --</option>
 
                             <?php foreach($cours as $c): ?>
-                                <option value="<?= $c["id_cours"] ?>">
+                                <option value="<?= htmlspecialchars($c["id_cours"]) ?>">
                                     <?= htmlspecialchars($c["code_cours"] . " - " . $c["intitule_cours"]) ?>
+
+                                    <?php if(!empty($c["id_enseignant"])): ?>
+                                        —
+                                        Enseignant :
+                                        <?= htmlspecialchars($c["nom"] . " " . $c["prenoms"]) ?>
+                                    <?php else: ?>
+                                        —
+                                        Aucun enseignant affecté
+                                    <?php endif; ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
+
+                        <p class="info-text">
+                            L’enseignant de l’activité est automatiquement celui affecté au cours sélectionné.
+                        </p>
                     </div>
 
                     <div class="form-group">
@@ -272,10 +371,12 @@ if($_SERVER["REQUEST_METHOD"] === "POST"){
                     </div>
 
                     <div class="form-group">
-                        <label>Nombre d’heures <span>*</span></label>
+                        <label>Nombre d’heures de l’activité <span>*</span></label>
                         <input type="number" name="nombre_heures" min="1" step="0.5" required>
 
                         <p class="info-text">
+                            Ce nombre d’heures concerne l’activité pédagogique déclarée.
+                            Il est indépendant du volume horaire administratif du cours.
                             Le nombre de séquences sera calculé automatiquement :
                             1 heure = 4 séquences.
                         </p>

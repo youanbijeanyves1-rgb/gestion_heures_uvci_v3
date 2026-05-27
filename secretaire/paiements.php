@@ -39,68 +39,30 @@ $params = [];
 
 $sql = "
 SELECT
-    base.id_enseignant,
-    base.nom,
-    base.prenoms,
-    base.statut,
-    base.id_grade,
-    base.libelle_grade,
-    base.charge_statutaire,
-    base.niveau,
-    SUM(base.volume_total) AS volume_total
-FROM (
-    SELECT
-        e.id_enseignant,
-        e.nom,
-        e.prenoms,
-        e.statut,
-        e.id_grade,
-        g.libelle_grade,
-        g.charge_statutaire,
-        cf.niveau,
-        ec.volume_horaire AS volume_total
-    FROM enseignant_cours ec
-    JOIN enseignant e ON e.id_enseignant = ec.id_enseignant
-    LEFT JOIN grade g ON g.id_grade = e.id_grade
-    JOIN cours c ON c.id_cours = ec.id_cours
-    LEFT JOIN cours_filiere cf ON cf.id_cours = c.id_cours
-    WHERE ec.actif = 1
+    e.id_enseignant,
+    e.nom,
+    e.prenoms,
+    e.statut,
+    e.id_grade,
+    g.libelle_grade,
+    g.charge_statutaire,
+    cf.niveau,
+    SUM(ap.volume_horaire_calcule) AS volume_total
+FROM activite_pedagogique ap
+JOIN enseignant e 
+    ON e.id_enseignant = ap.id_enseignant
+LEFT JOIN grade g 
+    ON g.id_grade = e.id_grade
+JOIN cours c 
+    ON c.id_cours = ap.id_cours
+LEFT JOIN cours_filiere cf 
+    ON cf.id_cours = c.id_cours
+WHERE ap.statut_validation = 'VALIDEE'
 ";
 
 if($idAnnee !== ""){
-    $sql .= " AND ec.id_annee = :id_annee_cours";
-    $params["id_annee_cours"] = $idAnnee;
-}
-
-if($idEnseignant !== ""){
-    $sql .= " AND e.id_enseignant = :id_enseignant_cours";
-    $params["id_enseignant_cours"] = $idEnseignant;
-}
-
-$sql .= "
-    UNION ALL
-
-    SELECT
-        e.id_enseignant,
-        e.nom,
-        e.prenoms,
-        e.statut,
-        e.id_grade,
-        g.libelle_grade,
-        g.charge_statutaire,
-        cf.niveau,
-        ap.volume_horaire_calcule AS volume_total
-    FROM activite_pedagogique ap
-    JOIN enseignant e ON e.id_enseignant = ap.id_enseignant
-    LEFT JOIN grade g ON g.id_grade = e.id_grade
-    JOIN cours c ON c.id_cours = ap.id_cours
-    LEFT JOIN cours_filiere cf ON cf.id_cours = c.id_cours
-    WHERE ap.statut_validation = 'VALIDEE'
-";
-
-if($idAnnee !== ""){
-    $sql .= " AND ap.id_annee = :id_annee_activite";
-    $params["id_annee_activite"] = $idAnnee;
+    $sql .= " AND ap.id_annee = :id_annee";
+    $params["id_annee"] = $idAnnee;
 }
 
 if($dateDebut !== "" && $dateFin !== ""){
@@ -110,25 +72,24 @@ if($dateDebut !== "" && $dateFin !== ""){
 }
 
 if($idEnseignant !== ""){
-    $sql .= " AND e.id_enseignant = :id_enseignant_activite";
-    $params["id_enseignant_activite"] = $idEnseignant;
+    $sql .= " AND e.id_enseignant = :id_enseignant";
+    $params["id_enseignant"] = $idEnseignant;
 }
 
 $sql .= "
-) AS base
 GROUP BY
-    base.id_enseignant,
-    base.nom,
-    base.prenoms,
-    base.statut,
-    base.id_grade,
-    base.libelle_grade,
-    base.charge_statutaire,
-    base.niveau
+    e.id_enseignant,
+    e.nom,
+    e.prenoms,
+    e.statut,
+    e.id_grade,
+    g.libelle_grade,
+    g.charge_statutaire,
+    cf.niveau
 ORDER BY
-    base.nom,
-    base.prenoms,
-    base.niveau
+    e.nom,
+    e.prenoms,
+    cf.niveau
 ";
 
 $stmt = $pdo->prepare($sql);
@@ -219,6 +180,40 @@ foreach($lignes as &$l){
     $totalEnseignants[$id] = true;
 }
 unset($l);
+
+/*
+|--------------------------------------------------------------------------
+| AFFICHAGE GLOBAL : UN ENSEIGNANT PAR LIGNE
+|--------------------------------------------------------------------------
+*/
+
+$affichageGlobal = [];
+
+if($idEnseignant === ""){
+
+    foreach($lignes as $ligne){
+
+        $id = $ligne["id_enseignant"];
+
+        if(!isset($affichageGlobal[$id])){
+
+            $affichageGlobal[$id] = [
+                "nom_complet" => $ligne["nom"] . " " . $ligne["prenoms"],
+                "libelle_grade" => $ligne["libelle_grade"],
+                "statut" => $ligne["statut"],
+                "volume_total" => 0,
+                "charge_statutaire" => $ligne["charge_statutaire"],
+                "volume_global_enseignant" => $ligne["volume_global_enseignant"],
+                "heures_payables" => 0,
+                "montant_a_payer" => 0
+            ];
+        }
+
+        $affichageGlobal[$id]["volume_total"] += (float)$ligne["volume_total"];
+        $affichageGlobal[$id]["heures_payables"] += (float)$ligne["heures_payables"];
+        $affichageGlobal[$id]["montant_a_payer"] += (float)$ligne["montant_a_payer"];
+    }
+}
 
 $lienPdf = "export_paiement_pdf.php?id_annee=" . urlencode($idAnnee)
     . "&id_enseignant=" . urlencode($idEnseignant)
@@ -355,6 +350,12 @@ $lienExcel = "export_paiement_excel.php?id_annee=" . urlencode($idAnnee)
                         </p>
 
                         <p>
+                            <strong>Règle volume :</strong>
+                            Les heures des cours ne sont pas prises en compte dans le paiement.
+                            Seules les activités pédagogiques validées sont comptabilisées.
+                        </p>
+
+                        <p>
                             <strong>Règle niveau :</strong>
                             L1, L2, L3 utilisent le taux LICENCE.
                             M1, M2 utilisent le taux MASTER.
@@ -373,102 +374,187 @@ $lienExcel = "export_paiement_excel.php?id_annee=" . urlencode($idAnnee)
                     <table class="table table-paiement">
 
                         <thead>
-                            <tr>
-                                <th>Enseignant</th>
-                                <th>Grade</th>
-                                <th>Statut</th>
-                                <th>Niveau cours</th>
-                                <th>Niveau taux</th>
-                                <th>Volume validé</th>
-                                <th>Charge statutaire</th>
-                                <th>Volume global</th>
-                                <th>Heures payables</th>
-                                <th>Taux horaire</th>
-                                <th>Montant à payer</th>
-                            </tr>
+                            <?php if($idEnseignant === ""): ?>
+                                <tr>
+                                    <th>Enseignant</th>
+                                    <th>Grade</th>
+                                    <th>Statut</th>
+                                    <th>Volume validé</th>
+                                    <th>Charge statutaire</th>
+                                    <th>Volume global</th>
+                                    <th>Heures payables</th>
+                                    <th>Montant à payer</th>
+                                </tr>
+                            <?php else: ?>
+                                <tr>
+                                    <th>Enseignant</th>
+                                    <th>Grade</th>
+                                    <th>Statut</th>
+                                    <th>Niveau cours</th>
+                                    <th>Niveau taux</th>
+                                    <th>Volume validé</th>
+                                    <th>Charge statutaire</th>
+                                    <th>Volume global</th>
+                                    <th>Heures payables</th>
+                                    <th>Taux horaire</th>
+                                    <th>Montant à payer</th>
+                                </tr>
+                            <?php endif; ?>
                         </thead>
 
                         <tbody>
 
-                            <?php if(count($lignes) > 0): ?>
+                            <?php if($idEnseignant === ""): ?>
 
-                                <?php foreach($lignes as $l): ?>
+                                <?php if(count($affichageGlobal) > 0): ?>
+
+                                    <?php foreach($affichageGlobal as $g): ?>
+                                        <tr>
+                                            <td>
+                                                <strong>
+                                                    <?= htmlspecialchars($g["nom_complet"]) ?>
+                                                </strong>
+                                            </td>
+
+                                            <td>
+                                                <?= htmlspecialchars($g["libelle_grade"] ?? "Non défini") ?>
+                                            </td>
+
+                                            <td>
+                                                <span class="badge-statut">
+                                                    <?= htmlspecialchars($g["statut"]) ?>
+                                                </span>
+                                            </td>
+
+                                            <td>
+                                                <?= number_format($g["volume_total"], 2, ',', ' ') ?> h
+                                            </td>
+
+                                            <td>
+                                                <?php if($g["statut"] === "PERMANENT"): ?>
+                                                    <?= number_format((float)$g["charge_statutaire"], 2, ',', ' ') ?> h
+                                                <?php else: ?>
+                                                    Non concerné
+                                                <?php endif; ?>
+                                            </td>
+
+                                            <td>
+                                                <?= number_format($g["volume_global_enseignant"], 2, ',', ' ') ?> h
+                                            </td>
+
+                                            <td>
+                                                <span class="badge-volume">
+                                                    <?= number_format($g["heures_payables"], 2, ',', ' ') ?> h
+                                                </span>
+                                            </td>
+
+                                            <td>
+                                                <?php if($g["montant_a_payer"] > 0): ?>
+                                                    <span class="montant">
+                                                        <?= number_format($g["montant_a_payer"], 0, ',', ' ') ?> FCFA
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="montant-zero">
+                                                        0 FCFA
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+
+                                <?php else: ?>
+
                                     <tr>
-                                        <td>
-                                            <strong>
-                                                <?= htmlspecialchars($l["nom"] . " " . $l["prenoms"]) ?>
-                                            </strong>
-                                        </td>
-
-                                        <td>
-                                            <?= htmlspecialchars($l["libelle_grade"] ?? "Non défini") ?>
-                                        </td>
-
-                                        <td>
-                                            <span class="badge-statut">
-                                                <?= htmlspecialchars($l["statut"]) ?>
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            <?= htmlspecialchars($l["niveau"] ?? "Non défini") ?>
-                                        </td>
-
-                                        <td>
-                                            <?= htmlspecialchars($l["niveau_taux"] ?? "Non défini") ?>
-                                        </td>
-
-                                        <td>
-                                            <?= number_format($l["volume_total"], 2, ',', ' ') ?> h
-                                        </td>
-
-                                        <td>
-                                            <?php if($l["statut"] === "PERMANENT"): ?>
-                                                <?= number_format($l["charge_statutaire"], 2, ',', ' ') ?> h
-                                            <?php else: ?>
-                                                Non concerné
-                                            <?php endif; ?>
-                                        </td>
-
-                                        <td>
-                                            <?= number_format($l["volume_global_enseignant"], 2, ',', ' ') ?> h
-                                        </td>
-
-                                        <td>
-                                            <span class="badge-volume">
-                                                <?= number_format($l["heures_payables"], 2, ',', ' ') ?> h
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            <?php if($l["taux_horaire"] > 0): ?>
-                                                <?= number_format($l["taux_horaire"], 0, ',', ' ') ?> FCFA
-                                            <?php else: ?>
-                                                <span class="badge danger">Taux manquant</span>
-                                            <?php endif; ?>
-                                        </td>
-
-                                        <td>
-                                            <?php if($l["montant_a_payer"] > 0): ?>
-                                                <span class="montant">
-                                                    <?= number_format($l["montant_a_payer"], 0, ',', ' ') ?> FCFA
-                                                </span>
-                                            <?php else: ?>
-                                                <span class="montant-zero">
-                                                    0 FCFA
-                                                </span>
-                                            <?php endif; ?>
+                                        <td colspan="8" class="text-center">
+                                            Aucun état de paiement disponible pour cette période.
                                         </td>
                                     </tr>
-                                <?php endforeach; ?>
+
+                                <?php endif; ?>
 
                             <?php else: ?>
 
-                                <tr>
-                                    <td colspan="11" class="text-center">
-                                        Aucun état de paiement disponible pour cette période.
-                                    </td>
-                                </tr>
+                                <?php if(count($lignes) > 0): ?>
+
+                                    <?php foreach($lignes as $l): ?>
+                                        <tr>
+                                            <td>
+                                                <strong>
+                                                    <?= htmlspecialchars($l["nom"] . " " . $l["prenoms"]) ?>
+                                                </strong>
+                                            </td>
+
+                                            <td>
+                                                <?= htmlspecialchars($l["libelle_grade"] ?? "Non défini") ?>
+                                            </td>
+
+                                            <td>
+                                                <span class="badge-statut">
+                                                    <?= htmlspecialchars($l["statut"]) ?>
+                                                </span>
+                                            </td>
+
+                                            <td>
+                                                <?= htmlspecialchars($l["niveau"] ?? "Non défini") ?>
+                                            </td>
+
+                                            <td>
+                                                <?= htmlspecialchars($l["niveau_taux"] ?? "Non défini") ?>
+                                            </td>
+
+                                            <td>
+                                                <?= number_format($l["volume_total"], 2, ',', ' ') ?> h
+                                            </td>
+
+                                            <td>
+                                                <?php if($l["statut"] === "PERMANENT"): ?>
+                                                    <?= number_format((float)$l["charge_statutaire"], 2, ',', ' ') ?> h
+                                                <?php else: ?>
+                                                    Non concerné
+                                                <?php endif; ?>
+                                            </td>
+
+                                            <td>
+                                                <?= number_format($l["volume_global_enseignant"], 2, ',', ' ') ?> h
+                                            </td>
+
+                                            <td>
+                                                <span class="badge-volume">
+                                                    <?= number_format($l["heures_payables"], 2, ',', ' ') ?> h
+                                                </span>
+                                            </td>
+
+                                            <td>
+                                                <?php if($l["taux_horaire"] > 0): ?>
+                                                    <?= number_format($l["taux_horaire"], 0, ',', ' ') ?> FCFA
+                                                <?php else: ?>
+                                                    <span class="badge danger">Taux manquant</span>
+                                                <?php endif; ?>
+                                            </td>
+
+                                            <td>
+                                                <?php if($l["montant_a_payer"] > 0): ?>
+                                                    <span class="montant">
+                                                        <?= number_format($l["montant_a_payer"], 0, ',', ' ') ?> FCFA
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="montant-zero">
+                                                        0 FCFA
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+
+                                <?php else: ?>
+
+                                    <tr>
+                                        <td colspan="11" class="text-center">
+                                            Aucun état de paiement disponible pour cette période.
+                                        </td>
+                                    </tr>
+
+                                <?php endif; ?>
 
                             <?php endif; ?>
 
