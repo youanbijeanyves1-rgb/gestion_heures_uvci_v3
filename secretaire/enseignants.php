@@ -57,7 +57,7 @@ if($_SESSION["role"] !== "SECRETAIRE_PRINCIPAL"){
                     <div class="module-card">
                         <div class="module-icon blue">📋</div>
 
-                        <h3>Gestion des enseignants</h3>
+                        <h3>Suivi des enseignants</h3>
 
                         <p>
                             Consulter, modifier, désactiver ou réactiver les enseignants enregistrés.
